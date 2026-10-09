@@ -177,6 +177,9 @@ internal class SpeechInputController(
         fun update(transform: (SpeechInputState) -> SpeechInputState) {
             if (generation == session) mutableState.value = transform(mutableState.value)
         }
+        // 系统识别在浮窗内采集，须先提升为麦克风前台服务，否则「使用中」麦克风会被系统判为不可用
+        beforeCapture()
+        capturing = true
         system = EtaSpeechInput(context,
             onListening = { update { it.copy(phase = EtaSpeechPhase.LISTENING, progress = "正在聆听") } },
             onRecognizing = { update { it.copy(phase = EtaSpeechPhase.RECOGNIZING, progress = "正在识别") } },
