@@ -66,4 +66,71 @@ class SystemSpeechRecognizerTest {
             ),
         )
     }
+
+    // 小米识别服务用自带命名空间的签名级权限名，未配置 setting 时也必须能被选中。
+    @Test fun vendorScopedBindPermissionIsSelectedWithoutConfiguredService() {
+        val xiaomi = ComponentName(
+            "com.xiaomi.mibrain.speech",
+            "com.xiaomi.mibrain.speech.asr.AsrService",
+        )
+        assertEquals(
+            xiaomi,
+            SystemSpeechRecognizer.selectExternalService(
+                listOf(
+                    service(
+                        xiaomi.packageName,
+                        xiaomi.className,
+                        permission = "com.xiaomi.mibrain.speech.permission.BIND_SPEECH_RECOGNITION_SERVICE",
+                    ),
+                ),
+                "io.github.mangi.eta",
+                null,
+            ),
+        )
+    }
+
+    @Test fun ownVendorScopedServiceIsStillExcluded() {
+        assertNull(
+            SystemSpeechRecognizer.selectExternalService(
+                listOf(
+                    service(
+                        "io.github.mangi.eta",
+                        "EtaRecognitionService",
+                        permission = "io.github.mangi.eta.permission.BIND_SPEECH_RECOGNITION_SERVICE",
+                    ),
+                ),
+                "io.github.mangi.eta",
+                null,
+            ),
+        )
+    }
+
+    @Test fun permissionNameWithoutVendorScopeIsNotAccepted() {
+        assertNull(
+            SystemSpeechRecognizer.selectExternalService(
+                listOf(
+                    service("third.party", "Recognizer", permission = "third.party.BIND_SPEECH_RECOGNITION_SERVICE"),
+                    service("third.party", "Suffix", permission = "third.party.permission.NOT_BIND_SPEECH_RECOGNITION_SERVICE"),
+                ),
+                "io.github.mangi.eta",
+                null,
+            ),
+        )
+    }
+
+    @Test fun aospBindPermissionTakesPrecedenceOverVendorVariant() {
+        val vendor = ComponentName("com.vendor.asr", "com.vendor.asr.AsrService")
+        val aosp = ComponentName("com.google.android.tts", "GoogleTTSRecognitionService")
+        assertEquals(
+            aosp,
+            SystemSpeechRecognizer.selectExternalService(
+                listOf(
+                    service(vendor.packageName, vendor.className, permission = "com.vendor.asr.permission.BIND_SPEECH_RECOGNITION_SERVICE"),
+                    service(aosp.packageName, aosp.className, permission = "android.permission.BIND_SPEECH_RECOGNITION_SERVICE"),
+                ),
+                "io.github.mangi.eta",
+                null,
+            ),
+        )
+    }
 }

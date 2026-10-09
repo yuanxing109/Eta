@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
+import android.content.pm.ServiceInfo
 import android.provider.Settings
 import android.speech.RecognitionService
 import android.speech.SpeechRecognizer
@@ -63,12 +64,13 @@ internal object SystemSpeechRecognizer {
             }
             .filter {
                 val component = ComponentName(it.packageName, it.name)
-                component == configured ||
-                    it.permission == "android.permission.BIND_SPEECH_RECOGNITION_SERVICE"
+                component == configured || declaresRecognitionBinding(it)
             }
             .sortedWith(
-                compareByDescending<android.content.pm.ServiceInfo> {
+                compareByDescending<ServiceInfo> {
                     ComponentName(it.packageName, it.name) == configured
+                }.thenByDescending {
+                    it.permission == BIND_SPEECH_RECOGNITION_SERVICE
                 }.thenByDescending {
                     (it.applicationInfo?.flags ?: 0) and ApplicationInfo.FLAG_SYSTEM != 0
                 },
@@ -76,5 +78,14 @@ internal object SystemSpeechRecognizer {
             .map { ComponentName(it.packageName, it.name) }
             .firstOrNull()
 
+    /** 除 AOSP 权限名外，一并接受厂商按 {包名}.permission.BIND_SPEECH_RECOGNITION_SERVICE 约定声明的识别服务。 */
+    private fun declaresRecognitionBinding(service: ServiceInfo): Boolean {
+        val permission = service.permission ?: return false
+        return permission == BIND_SPEECH_RECOGNITION_SERVICE ||
+            permission.endsWith(BIND_SPEECH_RECOGNITION_PERMISSION_SUFFIX)
+    }
+
+    private const val BIND_SPEECH_RECOGNITION_SERVICE = "android.permission.BIND_SPEECH_RECOGNITION_SERVICE"
+    private const val BIND_SPEECH_RECOGNITION_PERMISSION_SUFFIX = ".permission.BIND_SPEECH_RECOGNITION_SERVICE"
     private const val VOICE_RECOGNITION_SERVICE = "voice_recognition_service"
 }
