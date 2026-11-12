@@ -354,7 +354,7 @@ internal abstract class EtaDatabase : RoomDatabase() {
                 "INSERT OR IGNORE INTO project_spaces " +
                     "(id, space_key, kind, host_path, linux_path, title, deletable, last_used_at, created_at) " +
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                arrayOf(
+                arrayOf<Any?>(
                     ProjectSpaceEntity.DEFAULT_SPACE_ID,
                     ProjectSpaceEntity.DEFAULT_SPACE_KEY,
                     ProjectSpaceKind.BUILTIN.name,
