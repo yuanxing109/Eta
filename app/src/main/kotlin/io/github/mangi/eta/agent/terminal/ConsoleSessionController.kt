@@ -60,6 +60,10 @@ internal class ConsoleSessionController(
         onOutput: (sessionId: String, chunk: ByteArray) -> Unit,
         onExit: (sessionId: String) -> Unit,
         identity: String? = null,
+        // 宿主侧 workspace 源（bind 到 rootfs 的 /workspace）。null 时用后端默认，行为与旧版一致。
+        linuxHostWorkspacePath: String? = null,
+        // 会话初始工作目录（rootfs 内）。null 时回落 /workspace，与旧版写死值一致。
+        linuxDefaultCwd: String? = null,
     ): OpenResult {
         synchronized(sessionLock) {
             pruneDeadSessionsLocked()
@@ -91,6 +95,7 @@ internal class ConsoleSessionController(
                 pty = true,
                 ptyCols = cols,
                 ptyRows = rows,
+                linuxWorkspace = if (environment.isLinux) linuxHostWorkspacePath else null,
             ) ?: return OpenResult.Failed("PROCESS_START_FAILED", "无法启动控制台进程，请检查所选环境和终端组件")
 
             val sessionId = "c${++nextSessionNumber}"
@@ -116,7 +121,12 @@ internal class ConsoleSessionController(
             }
             // 落到环境默认工作目录；clear 清掉这条引导命令本身的回显。
             // 用户工具的安装器常把 PATH 写进 profile；控制台 shell 不是 login shell，这里显式补齐。
-            val defaultCwd = if (environment.isLinux) "/workspace" else TerminalRuntime.workspace(identity)
+            // Linux 初始目录由上层传入（项目路径），取不到时回落 /workspace；不再硬编码。
+            val defaultCwd = if (environment.isLinux) {
+                linuxDefaultCwd ?: TerminalRuntime.LINUX_WORKSPACE_PATH
+            } else {
+                TerminalRuntime.workspace(identity)
+            }
             val bootstrap = "mkdir -p ${shellQuote(defaultCwd)}; " +
                 "[ -f /etc/profile ] && . /etc/profile; " +
                 "[ -f \"\$HOME/.profile\" ] && . \"\$HOME/.profile\"; " +

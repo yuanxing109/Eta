@@ -2,6 +2,7 @@ package io.github.mangi.eta.agent.terminal
 
 import io.github.mangi.eta.core.AgentLogger
 import io.github.mangi.eta.agent.tool.requiredText
+import io.github.mangi.eta.data.repository.ProjectSpaceRepository
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -42,6 +43,8 @@ internal class RootShellTerminalController(
             } else {
                 linuxRootfsPath
             },
+            // 未显式绑定项目时取默认工作区；identity 用运行期实际身份，保证 root 授权时默认 cwd 为 /data/local/tmp/eta。
+            projectSpace = ProjectSpaceRepository.resolve(null, if (rootAvailable()) "root" else "user"),
         )
     }
 
@@ -150,7 +153,7 @@ internal class RootShellTerminalController(
             return errorJson("TERMINAL_CLOSED", "terminal controller 已关闭")
         }
 
-        val mkdirDefault = if (safeCwd == androidWorkspace()) "mkdir -p ${shellQuote(safeCwd)} && " else ""
+        val mkdirDefault = if (safeCwd == defaultHostWorkspace()) "mkdir -p ${shellQuote(safeCwd)} && " else ""
         val probeMarker = TerminalExecutionProbe.marker()
         val setup = "${mkdirDefault}cd ${shellQuote(safeCwd)} && export TERM=dumb NO_COLOR=1 && {\n${TerminalExecutionProbe.script(probeMarker)}\n}"
         val setupResult = runSessionCommand(session, setup, timeoutMs = 5_000)
@@ -522,7 +525,7 @@ internal class RootShellTerminalController(
         environmentPreflight(normalizedIdentity, environment)?.let { return it }
         val safeCwd = normalizeCwd(cwd, environment, normalizedIdentity)
         val timeout = timeoutSeconds.coerceIn(1, MAX_TIMEOUT_SECONDS)
-        val setup = if (safeCwd == androidWorkspace()) "mkdir -p ${shellQuote(safeCwd)} && " else ""
+        val setup = if (safeCwd == defaultHostWorkspace()) "mkdir -p ${shellQuote(safeCwd)} && " else ""
         val probeMarker = TerminalExecutionProbe.marker()
         val fullCommand = "${setup}cd ${shellQuote(safeCwd)} && export TERM=dumb NO_COLOR=1 && {\n${TerminalExecutionProbe.script(probeMarker)}\n$trimmed\n}"
         val result = runText(
@@ -667,11 +670,12 @@ internal class RootShellTerminalController(
     private fun defaultIdentity(environment: TerminalEnvironment): String =
         executionContext.identityFor(environment, rootAvailable())
 
-    private fun androidWorkspace(): String =
-        executionContext.androidWorkspacePath
+    private fun defaultHostWorkspace(): String =
+        executionContext.projectHostPath
 
     private fun normalizeCwd(cwd: String?, environment: TerminalEnvironment, identity: String): String {
-        val defaultCwd = if (environment.isLinux) executionContext.linuxWorkspacePath else androidWorkspace()
+        // 默认工作区改由会话所属项目决定：Linux 用项目 Linux 根，Android 用项目宿主根；未归属项目时回退旧默认。
+        val defaultCwd = if (environment.isLinux) executionContext.projectLinuxPath else executionContext.projectHostPath
         val requested = cwd.orEmpty().ifEmpty { defaultCwd }
         require('\u0000' !in requested && requested.length <= 4096) { "工作目录无效或过长" }
         val environmentPath = when {

@@ -481,7 +481,13 @@ internal class DetachedTaskSupervisor(
             else -> {
                 val rootfs = rootfsPath(environment)
                     ?: return OneShotShellResult(-1, ByteArray(0), "Linux rootfs 未配置".toByteArray())
-                oneShotSupervisor.buildLinuxPayload(rootfs, script, linuxSharedMountsProvider())
+                oneShotSupervisor.buildLinuxPayload(
+                    rootfsPath = rootfs,
+                    command = script,
+                    sharedMounts = linuxSharedMountsProvider(),
+                    // 显式补齐宿主 workspace 源，避免落到默认值后被误当成硬编码；与默认值等价。
+                    workspace = TerminalRuntime.workspace(identity),
+                )
             }
         }
         val process = runCatching {

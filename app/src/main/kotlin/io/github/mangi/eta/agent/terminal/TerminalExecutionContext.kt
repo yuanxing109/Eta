@@ -1,5 +1,6 @@
 package io.github.mangi.eta.agent.terminal
 
+import io.github.mangi.eta.data.repository.ProjectSpaceRef
 import java.io.File
 import org.json.JSONObject
 
@@ -9,6 +10,7 @@ internal data class TerminalExecutionContext(
     val linuxRootfsPath: String?,
     val userWorkspacePath: String = TerminalRuntime.userWorkspacePath,
     val sharedMounts: List<SharedFolderMount> = emptyList(),
+    val projectSpace: ProjectSpaceRef? = null,
 ) {
     init {
         require(linuxEnvironment.isLinux)
@@ -28,6 +30,14 @@ internal data class TerminalExecutionContext(
 
     val linuxHostWorkspacePath: String
         get() = if (linuxIdentity == "root") TerminalRuntime.ROOT_WORKSPACE_PATH else userWorkspacePath
+
+    /** 会话所属项目在宿主侧的根目录；未归属项目时退回默认 Android 工作区，保持旧行为。 */
+    val projectHostPath: String
+        get() = projectSpace?.hostPath ?: androidWorkspacePath
+
+    /** 会话所属项目在 Linux 侧的根目录；未归属项目时退回默认 Linux 工作区，保持旧行为。 */
+    val projectLinuxPath: String
+        get() = projectSpace?.linuxPath ?: linuxWorkspacePath
 
     val linuxReady: Boolean
         get() = LinuxEnvironmentPaths.rootfsReady(linuxRootfsPath)
@@ -97,6 +107,13 @@ internal data class TerminalExecutionContext(
             append("PRoot 下若已授予所有文件访问权限，宿主 \"/storage/emulated/0\" 也会默认挂载至 Linux 同路径。")
         }
         append("Linux 路径按 Linux 环境解释。")
+        append("\n本会话工作区：")
+        append(projectSpace?.title ?: "默认工作区")
+        append("（Linux 路径 ")
+        append(JSONObject.quote(projectLinuxPath))
+        append("，宿主路径 ")
+        append(JSONObject.quote(projectHostPath))
+        append("）；默认在此目录读写，跨目录操作先说明理由。")
     }
 
     private companion object {

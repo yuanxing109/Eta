@@ -60,6 +60,7 @@ import io.github.mangi.eta.data.repository.AgentMemoryMutation
 import io.github.mangi.eta.data.repository.AgentMemoryRepository
 import io.github.mangi.eta.data.repository.AgentMemoryWriteResult
 import io.github.mangi.eta.data.repository.LinuxEnvironmentSettingsRepository
+import io.github.mangi.eta.data.repository.ProjectSpaceRepository
 import io.github.mangi.eta.data.repository.WebToolsSettingsRepository
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
@@ -142,6 +143,8 @@ internal class AgentLocalTools(
             linuxEnvironment = environment,
             linuxRootfsPath = LinuxEnvironmentPaths.rootfsDir(context, checkNotNull(environment.linuxDistribution)).absolutePath,
             sharedMounts = SharedFolderMounts.current(),
+            // 会话未指定项目时按当前实际身份取默认工作区：root 有授权落 /data/local/tmp/eta，否则落 App 私有工作区。
+            projectSpace = ProjectSpaceRepository.resolve(null, if (rootAvailable()) "root" else "user"),
         )
     }
     private val terminalController = RootShellTerminalController(

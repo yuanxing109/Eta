@@ -23,6 +23,9 @@ internal class ShellProcessSupervisor(
         const val PTY_TERM_TYPE = "xterm-256color"
         const val BUSYBOX_APPLET_DIR = "${TerminalRuntime.ROOT_WORKSPACE_PATH}/.busybox"
 
+        /** 可无引号直接拼进 shell 的路径字符集；命中即原样输出，保证默认构建产物字节不变。 */
+        const val PATH_RAW_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_./-"
+
         fun isAndroidRuntime(): Boolean =
             System.getProperty("java.vm.name").orEmpty().equals("Dalvik", ignoreCase = true) ||
                 System.getProperty("java.runtime.name").orEmpty().contains("Android", ignoreCase = true)
@@ -46,6 +49,8 @@ internal class ShellProcessSupervisor(
         environment: TerminalEnvironment = TerminalEnvironment.ANDROID,
         linuxRootfsPath: String? = null,
         linuxSharedMounts: List<SharedFolderMount> = emptyList(),
+        // 宿主侧 workspace 源路径覆盖；null 时沿用各后端历史默认（proot 私有目录 / chroot root 目录）。
+        linuxWorkspace: String? = null,
         pty: Boolean = false,
         ptyCols: Int = DEFAULT_PTY_COLS,
         ptyRows: Int = DEFAULT_PTY_ROWS,
@@ -70,6 +75,7 @@ internal class ShellProcessSupervisor(
                 environment = environment,
                 linuxRootfsPath = linuxRootfsPath,
                 linuxSharedMounts = linuxSharedMounts,
+                linuxWorkspace = linuxWorkspace,
                 pty = pty,
                 ptyCols = ptyCols,
                 ptyRows = ptyRows,
@@ -182,6 +188,8 @@ internal class ShellProcessSupervisor(
         environment: TerminalEnvironment,
         linuxRootfsPath: String?,
         linuxSharedMounts: List<SharedFolderMount> = emptyList(),
+        // 宿主侧 workspace 源路径覆盖；null 时交给 buildLinuxPayload 按后端回落到历史默认。
+        linuxWorkspace: String? = null,
         pty: Boolean = false,
         ptyCols: Int = DEFAULT_PTY_COLS,
         ptyRows: Int = DEFAULT_PTY_ROWS,
@@ -195,14 +203,18 @@ internal class ShellProcessSupervisor(
                 command = managedCommand,
                 interactivePty = pty && command == null,
             )
-            else -> buildLinuxPayload(
-                rootfsPath = requireNotNull(linuxRootfsPath) {
+            else -> {
+                val rootfsPath = requireNotNull(linuxRootfsPath) {
                     "Linux 工具环境 rootfs 未配置"
-                },
-                command = managedCommand,
-                sharedMounts = linuxSharedMounts,
-                termType = if (pty) PTY_TERM_TYPE else "dumb",
-            )
+                }
+                buildLinuxPayload(
+                    rootfsPath = rootfsPath,
+                    command = managedCommand,
+                    sharedMounts = linuxSharedMounts,
+                    termType = if (pty) PTY_TERM_TYPE else "dumb",
+                    workspace = linuxWorkspace ?: defaultLinuxWorkspace(rootfsPath),
+                )
+            }
         }
 
         val path = shellQuote(ownershipFile.absolutePath)
@@ -287,9 +299,12 @@ internal class ShellProcessSupervisor(
         command: String?,
         sharedMounts: List<SharedFolderMount> = emptyList(),
         termType: String = "dumb",
+        // 宿主侧 workspace 源路径。默认按后端取历史值，不传参时与旧实现逐字节一致；
+        // 上层要将会话落进项目目录时，从这里显式传入，不再写死 /data/local/tmp/eta 或应用私有目录。
+        workspace: String = defaultLinuxWorkspace(rootfsPath),
     ): String {
         if (LinuxEnvironmentPaths.backendOf(rootfsPath) == LinuxExecutionBackend.PROOT) {
-            return ProotCommandBuilder.payload(rootfsPath, command, sharedMounts, termType)
+            return ProotCommandBuilder.payload(rootfsPath, command, sharedMounts, termType, workspace = workspace)
         }
         val rootfs = shellQuote(rootfsPath)
         val mode = if (command == null) "session" else "command"
@@ -326,8 +341,8 @@ internal class ShellProcessSupervisor(
             fi
             [ -d /data/local/tmp ] || exit 125
             eta_mount_required /data/local/tmp "${'$'}eta_rootfs/data/local/tmp" bind
-            "${'$'}eta_busybox" mkdir -p /data/local/tmp/eta || exit 125
-            eta_mount_required /data/local/tmp/eta "${'$'}eta_rootfs/workspace" bind
+            "${'$'}eta_busybox" mkdir -p ${bindSource(workspace)} || exit 125
+            eta_mount_required ${bindSource(workspace)} "${'$'}eta_rootfs/workspace" bind
         """.trimIndent()
         val innerScriptTail = """
             if [ "${'$'}eta_mode" = command ]; then
@@ -376,6 +391,29 @@ internal class ShellProcessSupervisor(
             "\"${'$'}eta_busybox\" sh -c ${shellQuote(innerScript)} eta-linux " +
             "\"${'$'}eta_rootfs\" \"${'$'}eta_busybox\" $mode $payload"
     }
+
+    /**
+     * 未显式传入 workspace 时按后端复刻历史默认：proot 用应用私有工作区，chroot 用 root 工作区
+     * （/data/local/tmp/eta）。这样不传参的调用与本参数化之前的输出逐字节一致。
+     */
+    private fun defaultLinuxWorkspace(rootfsPath: String): String =
+        if (LinuxEnvironmentPaths.backendOf(rootfsPath) == LinuxExecutionBackend.PROOT) {
+            TerminalRuntime.userWorkspacePath
+        } else {
+            TerminalRuntime.ROOT_WORKSPACE_PATH
+        }
+
+    /**
+     * 把宿主侧路径拼进 shell 脚本。只含 [A-Za-z0-9_./-] 时原样输出（与历史写死字面量一致，
+     * 不改动默认构建产物的字节）；一旦出现空格、引号等特殊字符再做 POSIX 单引号转义。
+     * bind 源里不允许出现冒号，故无需考虑 -o 选项的分隔歧义。
+     */
+    private fun bindSource(path: String): String =
+        if (path.isNotEmpty() && path.all { it in PATH_RAW_CHARS }) {
+            path
+        } else {
+            shellQuote(path)
+        }
 
     private fun terminateProcessTree(
         process: Process,
