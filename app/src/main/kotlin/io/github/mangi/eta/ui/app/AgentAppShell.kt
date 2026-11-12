@@ -77,6 +77,7 @@ import io.github.mangi.eta.ui.components.rememberTopBarBackdrop
 import io.github.mangi.eta.ui.components.topBarContainerColor
 import io.github.mangi.eta.ui.model.AgentModelPickerUiState
 import io.github.mangi.eta.ui.model.ConversationPaneUiState
+import io.github.mangi.eta.ui.model.ConversationSpaceUi
 import io.github.mangi.eta.ui.model.ConversationSummaryUi
 import io.github.mangi.eta.ui.navigation.AppRoute
 import kotlinx.coroutines.launch
@@ -127,6 +128,7 @@ internal fun AgentAppShell(
     onConversationExport: (ConversationSummaryUi) -> Unit,
     onConversationDelete: (ConversationSummaryUi) -> Unit,
     onConversationMoveToSpace: (ConversationSummaryUi) -> Unit,
+    onManageProjectSpace: (ConversationSpaceUi) -> Unit,
     onOpenTools: () -> Unit,
     onOpenSkills: () -> Unit,
     onOpenCharacters: () -> Unit,
@@ -297,6 +299,7 @@ internal fun AgentAppShell(
                 onConversationExport = onConversationExport,
                 onConversationDelete = onConversationDelete,
                 onConversationMoveToSpace = onConversationMoveToSpace,
+                onManageProjectSpace = onManageProjectSpace,
                 onOpenSettings = onOpenSettings,
                 onOpenModelProviders = onOpenModelProviders,
                 onOpenTools = onOpenTools,

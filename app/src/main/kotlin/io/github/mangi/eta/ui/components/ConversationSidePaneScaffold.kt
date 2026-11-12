@@ -49,6 +49,7 @@ import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
 import io.github.mangi.eta.R
 import io.github.mangi.eta.ui.model.ConversationPaneUiState
+import io.github.mangi.eta.ui.model.ConversationSpaceUi
 import io.github.mangi.eta.ui.model.ConversationSummaryUi
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.collectLatest
@@ -79,6 +80,7 @@ fun ConversationSidePaneScaffold(
     onConversationExport: (ConversationSummaryUi) -> Unit,
     onConversationDelete: (ConversationSummaryUi) -> Unit,
     onConversationMoveToSpace: (ConversationSummaryUi) -> Unit,
+    onManageProjectSpace: (ConversationSpaceUi) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenModelProviders: () -> Unit,
     onOpenTools: () -> Unit,
@@ -233,6 +235,7 @@ fun ConversationSidePaneScaffold(
                         onConversationExport = onConversationExport,
                         onConversationDelete = onConversationDelete,
                         onConversationMoveToSpace = onConversationMoveToSpace,
+                        onManageProjectSpace = onManageProjectSpace,
                         onOpenSettings = onOpenSettings,
                         onOpenModelProviders = onOpenModelProviders,
                         onOpenTools = onOpenTools,

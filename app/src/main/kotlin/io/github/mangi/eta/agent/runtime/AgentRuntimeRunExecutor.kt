@@ -116,6 +116,10 @@ internal class AgentRuntimeRunExecutor(
             val conversationId = uiPayload?.conversationId
                 ?.takeIf { it.isNotBlank() }
             memoryConversationId = conversationId
+            // 会话绑定项目时取出 spaceKey 下传给终端工具，用于解析项目工作区（挂载源与默认 cwd）。
+            val projectSpaceKey = conversationId?.let { id ->
+                runBlocking { EtaDatabase.get(appContext).conversationDao().conversation(id)?.spaceKey }
+            }
             val roleplayContext = conversationId?.let { id ->
                 runBlocking { RoleplayRunContext.resolve(appContext, id, contextWindow, memoryEnabled) }
             }
@@ -178,6 +182,7 @@ internal class AgentRuntimeRunExecutor(
             val executor = AgentLocalTools(
                 context = appContext,
                 logger = AndroidAgentLogger,
+                projectSpaceKey = projectSpaceKey,
                 browserRunId = request.runId,
                 browserSession = BrowserSessionRegistry.get(browserKey),
                 guiControl = guiRun,

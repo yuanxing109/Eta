@@ -34,6 +34,7 @@ import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Shield
@@ -146,6 +147,7 @@ internal fun ConversationPanePanel(
     onConversationExport: (ConversationSummaryUi) -> Unit,
     onConversationDelete: (ConversationSummaryUi) -> Unit,
     onConversationMoveToSpace: (ConversationSummaryUi) -> Unit,
+    onManageProjectSpace: (ConversationSpaceUi) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenModelProviders: () -> Unit,
     onOpenTools: () -> Unit,
@@ -158,8 +160,8 @@ internal fun ConversationPanePanel(
     val query = state.searchQuery.trim()
     // 项目分组默认折叠：会话多时列表首先是一屏分组头，展开才进入组内。
     var expandedSpaceKeys by remember { mutableStateOf(setOf<String>()) }
-    val entries = remember(state.conversations, state.spaces, expandedSpaceKeys) {
-        buildDrawerEntries(state.conversations, state.spaces, expandedSpaceKeys)
+    val entries = remember(state.conversations, state.spaces, expandedSpaceKeys, query) {
+        buildDrawerEntries(state.conversations, state.spaces, expandedSpaceKeys, query)
     }
 
     Surface(
@@ -200,7 +202,7 @@ internal fun ConversationPanePanel(
                 verticalArrangement = Arrangement.spacedBy(ConversationPanelMetrics.RowGap),
                 overscrollEffect = null,
             ) {
-                if (state.conversations.isEmpty()) {
+                if (entries.isEmpty()) {
                     item {
                         EmptyConversations(isSearching = query.isNotBlank())
                     }
@@ -211,6 +213,7 @@ internal fun ConversationPanePanel(
                                 ConversationSpaceHeader(
                                     header = entry,
                                     isFirstSection = entryIndex == 0,
+                                    onManageProjectSpace = onManageProjectSpace,
                                     onToggle = {
                                         expandedSpaceKeys = if (entry.expanded) {
                                             expandedSpaceKeys - entry.space.spaceKey
@@ -348,6 +351,7 @@ private fun ConversationSectionHeader(
 private fun ConversationSpaceHeader(
     header: ConversationDrawerEntry.SpaceHeader,
     isFirstSection: Boolean,
+    onManageProjectSpace: (ConversationSpaceUi) -> Unit,
     onToggle: () -> Unit,
 ) {
     Row(
@@ -383,6 +387,20 @@ private fun ConversationSpaceHeader(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(CircleShape)
+                .clickable { onManageProjectSpace(header.space) },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.MoreVert,
+                contentDescription = null,
+                tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                modifier = Modifier.size(16.dp),
+            )
+        }
         Text(
             text = header.count.toString(),
             style = MiuixTheme.textStyles.footnote2,
@@ -801,22 +819,32 @@ private fun buildDrawerEntries(
     conversations: List<ConversationSummaryUi>,
     spaces: List<ConversationSpaceUi>,
     expandedSpaceKeys: Set<String>,
+    query: String = "",
 ): List<ConversationDrawerEntry> {
     if (conversations.isEmpty()) return emptyList()
+    val normalizedQuery = query.trim()
+    val searchActive = normalizedQuery.isNotEmpty()
+    fun ConversationSummaryUi.matchesSearch(): Boolean =
+        title.contains(normalizedQuery, ignoreCase = true) ||
+            preview.contains(normalizedQuery, ignoreCase = true)
     val projectKeys = spaces.mapTo(mutableSetOf()) { it.spaceKey }
     val bySpace = conversations
         .filter { it.spaceKey != null && it.spaceKey in projectKeys }
         .groupBy { it.spaceKey.orEmpty() }
     val entries = mutableListOf<ConversationDrawerEntry>()
     for (space in spaces) {
+        val spaceTitleHit = searchActive && space.title.contains(normalizedQuery, ignoreCase = true)
         val items = bySpace[space.spaceKey].orEmpty()
+            .let { if (!searchActive || spaceTitleHit) it else it.filter { c -> c.matchesSearch() } }
         if (items.isEmpty()) continue
-        val expanded = space.spaceKey in expandedSpaceKeys
+        // 搜索命中的项目组强制展开，但不改写用户手动的 expandedSpaceKeys。
+        val expanded = if (searchActive) true else space.spaceKey in expandedSpaceKeys
         entries += ConversationDrawerEntry.SpaceHeader(space = space, count = items.size, expanded = expanded)
         if (expanded) items.forEach { entries += ConversationDrawerEntry.Conversation(it) }
     }
     conversations
         .filter { it.spaceKey == null || it.spaceKey !in projectKeys }
+        .filter { !searchActive || it.matchesSearch() }
         .groupForDrawer()
         .forEach { group ->
             entries += ConversationDrawerEntry.SectionHeader(group)

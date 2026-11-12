@@ -244,6 +244,12 @@
   <string name="conversation_move_space_default">Default workspace</string>
   <string name="conversation_move_space_new">New project</string>
   <string name="conversation_move_space_new_hint">Project name</string>
+  <string name="project_manage_title">Manage project</string>
+  <string name="project_open_in_terminal">Open in terminal</string>
+  <string name="project_rename">Rename project</string>
+  <string name="project_delete">Delete project</string>
+  <string name="project_delete_message">The project is removed. Its conversations fall back to the default workspace; the conversations themselves are kept.</string>
+  <string name="project_rename_hint">Project name</string>
   <string name="conversation_dock_models">Models</string>
   <string name="conversation_preview_reasoning">Eta is reasoning</string>
   <string name="conversation_preview_tool_call">Tool call: %1$s</string>

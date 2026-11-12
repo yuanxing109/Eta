@@ -43,6 +43,10 @@ internal interface ConversationDao : ChunkedTextDao {
     @Query("SELECT COUNT(*) FROM conversations WHERE space_key = :spaceKey")
     suspend fun conversationCountForSpace(spaceKey: String): Int
 
+    /** 项目被删除后，原本归入它的会话回落到默认工作区，会话本身不删。 */
+    @Query("UPDATE conversations SET space_key = NULL WHERE space_key = :spaceKey")
+    suspend fun clearConversationSpace(spaceKey: String): Int
+
     @Query("UPDATE conversations SET title = :title, updated_at = :updatedAt, is_pinned = :isPinned WHERE id = :conversationId")
     suspend fun updateConversationTitle(conversationId: String, title: String, updatedAt: Long, isPinned: Boolean = false)
 

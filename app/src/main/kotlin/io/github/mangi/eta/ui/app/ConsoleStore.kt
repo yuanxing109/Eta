@@ -5,6 +5,7 @@ import androidx.compose.runtime.Immutable
 import io.github.mangi.eta.R
 import io.github.mangi.eta.agent.terminal.ConsoleSessionController
 import io.github.mangi.eta.agent.terminal.LinuxEnvironmentPaths
+import io.github.mangi.eta.agent.terminal.PendingTerminalWorkspace
 import io.github.mangi.eta.agent.terminal.SharedFolderMounts
 import io.github.mangi.eta.agent.terminal.TerminalEnvironment
 import io.github.mangi.eta.agent.terminal.TerminalKey
@@ -17,6 +18,7 @@ import io.github.mangi.eta.agent.terminal.ptySupported
 import io.github.mangi.eta.agent.terminal.terminalEnvironment
 import io.github.mangi.eta.core.AndroidAgentLogger
 import io.github.mangi.eta.data.repository.LinuxEnvironmentSettingsRepository
+import io.github.mangi.eta.data.repository.ProjectSpaceRepository
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -346,6 +348,11 @@ internal class ConsoleStore(
                 return
             }
         } else null
+        // 「在项目里打开终端」时，UI 会先把项目宿主路径暂存到这里；首次建会话消费一次作为初始目录与挂载源。
+        val pendingWorkspace = PendingTerminalWorkspace.consume()
+        val pendingLinuxPath = pendingWorkspace?.let { host ->
+            ProjectSpaceRepository.cached().firstOrNull { it.hostPath == host }?.linuxPath
+        }
         val result = try {
             controller.open(
                 environment = environment,
@@ -357,6 +364,8 @@ internal class ConsoleStore(
                     lease?.release()
                     onExit(sessionId)
                 },
+                linuxHostWorkspacePath = pendingWorkspace,
+                linuxDefaultCwd = pendingLinuxPath,
             )
         } catch (failure: Throwable) {
             lease?.release()

@@ -44,6 +44,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -114,6 +115,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import io.github.mangi.eta.agent.terminal.PendingTerminalWorkspace
+import io.github.mangi.eta.data.repository.ProjectSpaceRepository
 import io.github.mangi.eta.ui.model.ConversationSpaceUi
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
@@ -206,6 +209,9 @@ fun AgentAppRoot(
     var conversationExportTarget by remember { mutableStateOf<ConversationSummaryUi?>(null) }
     var conversationMoveSpaceTarget by remember { mutableStateOf<ConversationSummaryUi?>(null) }
     var conversationCreateSpaceTarget by remember { mutableStateOf<ConversationSummaryUi?>(null) }
+    var projectManageSpaceTarget by remember { mutableStateOf<ConversationSpaceUi?>(null) }
+    var projectRenameSpaceTarget by remember { mutableStateOf<ConversationSpaceUi?>(null) }
+    var projectDeleteSpaceTarget by remember { mutableStateOf<ConversationSpaceUi?>(null) }
     var messageDeleteTarget by remember { mutableStateOf<MessageMutationTarget?>(null) }
     var messageRegenerateTarget by remember { mutableStateOf<MessageMutationTarget?>(null) }
     val conversationExportLauncher = rememberLauncherForActivityResult(
@@ -383,6 +389,7 @@ fun AgentAppRoot(
                 agentState.refreshProjectSpaces()
                 conversationMoveSpaceTarget = conversation
             },
+            onManageProjectSpace = { space -> projectManageSpaceTarget = space },
             onOpenTools = { pushRoute(AppRoute.Tools) },
             onOpenSkills = { pushRoute(AppRoute.Skills) },
             onOpenCharacters = { pushRoute(AppRoute.Characters) },
@@ -1065,6 +1072,163 @@ fun AgentAppRoot(
         }
     }
 
+    projectManageSpaceTarget?.let { space ->
+        val onOpenInTerminal: () -> Unit = {
+            val ref = ProjectSpaceRepository.cached().firstOrNull { it.spaceKey == space.spaceKey }
+            projectManageSpaceTarget = null
+            if (ref != null) {
+                PendingTerminalWorkspace.request(ref.hostPath)
+                pushRoute(AppRoute.Terminal)
+            }
+        }
+        when (LocalUiStyle.current) {
+            AppearanceUiStyle.COUI -> {
+                CouiNoticeDialog(
+                    visible = true,
+                    title = stringResource(R.string.project_manage_title),
+                    message = space.title,
+                    onDismissRequest = { projectManageSpaceTarget = null },
+                ) {
+                    ProjectSpaceActionRow(
+                        title = stringResource(R.string.project_open_in_terminal),
+                        onClick = onOpenInTerminal,
+                    )
+                    ProjectSpaceActionRow(
+                        title = stringResource(R.string.project_rename),
+                        onClick = {
+                            projectRenameSpaceTarget = space
+                            projectManageSpaceTarget = null
+                        },
+                    )
+                    ProjectSpaceActionRow(
+                        title = stringResource(R.string.project_delete),
+                        destructive = true,
+                        onClick = {
+                            projectDeleteSpaceTarget = space
+                            projectManageSpaceTarget = null
+                        },
+                    )
+                }
+            }
+            AppearanceUiStyle.MIUIX -> {
+                WindowDialog(
+                    show = true,
+                    cornerRadius = DialogDefaults.CornerRadius,
+                    title = stringResource(R.string.project_manage_title),
+                    summary = space.title,
+                    onDismissRequest = { projectManageSpaceTarget = null },
+                ) {
+                    Column {
+                        ProjectSpaceActionRow(
+                            title = stringResource(R.string.project_open_in_terminal),
+                            onClick = onOpenInTerminal,
+                        )
+                        ProjectSpaceActionRow(
+                            title = stringResource(R.string.project_rename),
+                            onClick = {
+                                projectRenameSpaceTarget = space
+                                projectManageSpaceTarget = null
+                            },
+                        )
+                        ProjectSpaceActionRow(
+                            title = stringResource(R.string.project_delete),
+                            destructive = true,
+                            onClick = {
+                                projectDeleteSpaceTarget = space
+                                projectManageSpaceTarget = null
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    projectRenameSpaceTarget?.let { space ->
+        var projectTitleInput by remember(space.spaceKey) { mutableStateOf(space.title) }
+        val onRenameProject: () -> Unit = {
+            val trimmed = projectTitleInput.trim()
+            if (trimmed.isNotEmpty()) {
+                agentState.renameProjectSpace(space.spaceKey, trimmed)
+                projectRenameSpaceTarget = null
+            }
+        }
+        when (LocalUiStyle.current) {
+            AppearanceUiStyle.COUI -> {
+                CouiInputDialog(
+                    visible = true,
+                    title = stringResource(R.string.project_rename),
+                    value = projectTitleInput,
+                    onValueChange = { projectTitleInput = it },
+                    placeholder = stringResource(R.string.project_rename_hint),
+                    confirmText = stringResource(R.string.project_rename),
+                    confirmEnabled = projectTitleInput.isNotBlank(),
+                    onConfirm = onRenameProject,
+                    onDismissRequest = { projectRenameSpaceTarget = null },
+                )
+            }
+            AppearanceUiStyle.MIUIX -> {
+                WindowDialog(
+                    show = true,
+                    cornerRadius = DialogDefaults.CornerRadius,
+                    title = stringResource(R.string.project_rename),
+                    onDismissRequest = { projectRenameSpaceTarget = null },
+                ) {
+                    Column {
+                        TextField(
+                            value = projectTitleInput,
+                            onValueChange = { projectTitleInput = it },
+                            label = stringResource(R.string.project_rename_hint),
+                        )
+                        MiuixDialogActions(
+                            confirmText = stringResource(R.string.project_rename),
+                            confirmEnabled = projectTitleInput.isNotBlank(),
+                            onCancel = { projectRenameSpaceTarget = null },
+                            onConfirm = onRenameProject,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    projectDeleteSpaceTarget?.let { space ->
+        val message = stringResource(R.string.project_delete_message)
+        val onDeleteProject: () -> Unit = {
+            agentState.deleteProjectSpace(space.spaceKey)
+            projectDeleteSpaceTarget = null
+        }
+        when (LocalUiStyle.current) {
+            AppearanceUiStyle.COUI -> {
+                CouiConfirmDialog(
+                    visible = true,
+                    title = stringResource(R.string.project_delete),
+                    message = message,
+                    confirmText = stringResource(R.string.action_delete),
+                    destructive = true,
+                    onConfirm = onDeleteProject,
+                    onDismissRequest = { projectDeleteSpaceTarget = null },
+                )
+            }
+            AppearanceUiStyle.MIUIX -> {
+                WindowDialog(
+                    show = true,
+                    cornerRadius = DialogDefaults.CornerRadius,
+                    title = stringResource(R.string.project_delete),
+                    summary = message,
+                    onDismissRequest = { projectDeleteSpaceTarget = null },
+                ) {
+                    MiuixDialogActions(
+                        confirmText = stringResource(R.string.action_delete),
+                        destructive = true,
+                        onCancel = { projectDeleteSpaceTarget = null },
+                        onConfirm = onDeleteProject,
+                    )
+                }
+            }
+        }
+    }
+
     messageDeleteTarget?.let { target ->
         val summary = if (target.laterTurnCount == 0) {
             stringResource(R.string.conversation_delete_message_body)
@@ -1219,5 +1383,27 @@ private fun ConversationSpacePickerRow(
                 modifier = Modifier.width(18.dp),
             )
         }
+    }
+}
+
+@Composable
+private fun ProjectSpaceActionRow(
+    title: String,
+    destructive: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = MiuixTheme.textStyles.body1,
+            color = if (destructive) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.onSurface,
+        )
     }
 }

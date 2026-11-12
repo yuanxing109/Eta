@@ -294,6 +294,12 @@
   <string name="conversation_move_space_default">預設工作區</string>
   <string name="conversation_move_space_new">新增專案</string>
   <string name="conversation_move_space_new_hint">專案名稱</string>
+  <string name="project_manage_title">專案管理</string>
+  <string name="project_open_in_terminal">在終端開啟</string>
+  <string name="project_rename">重新命名專案</string>
+  <string name="project_delete">刪除專案</string>
+  <string name="project_delete_message">專案會被移除，歸入其中的對話回落到預設工作區，對話本身不會刪除。</string>
+  <string name="project_rename_hint">專案名稱</string>
   <string name="conversation_dock_models">模型</string>
   <string name="conversation_preview_reasoning">Eta 正在思考</string>
   <string name="conversation_preview_tool_call">工具呼叫：%1$s</string>

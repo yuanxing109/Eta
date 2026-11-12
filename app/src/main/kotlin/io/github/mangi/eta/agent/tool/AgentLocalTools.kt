@@ -107,6 +107,7 @@ internal class AgentLocalTools(
     private val skillPackageInstaller: SkillPackageInstaller? = null,
     runAvailableSkillIds: Set<String> = emptySet(),
     pendingSkillConflict: PendingSkillConflictCapability? = null,
+    private val projectSpaceKey: String? = null,
     private val rootAvailable: () -> Boolean = { RootAccess.isGranted },
     private val virtualDisplayEnabled: () -> Boolean = {
         Prefs.isEnabled(Prefs.Keys.AGENT_VIRTUAL_DISPLAY_ENABLED)
@@ -143,8 +144,8 @@ internal class AgentLocalTools(
             linuxEnvironment = environment,
             linuxRootfsPath = LinuxEnvironmentPaths.rootfsDir(context, checkNotNull(environment.linuxDistribution)).absolutePath,
             sharedMounts = SharedFolderMounts.current(),
-            // 会话未指定项目时按当前实际身份取默认工作区：root 有授权落 /data/local/tmp/eta，否则落 App 私有工作区。
-            projectSpace = ProjectSpaceRepository.resolve(null, if (rootAvailable()) "root" else "user"),
+            // 会话绑定项目时取项目路径；未绑定时按当前实际身份取默认工作区：root 有授权落 /data/local/tmp/eta，否则落 App 私有工作区。
+            projectSpace = ProjectSpaceRepository.resolve(projectSpaceKey, if (rootAvailable()) "root" else "user"),
         )
     }
     private val terminalController = RootShellTerminalController(

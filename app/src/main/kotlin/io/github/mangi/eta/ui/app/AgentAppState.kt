@@ -1245,6 +1245,42 @@ internal class AgentAppState(
         }
     }
 
+    /**
+     * 重命名项目：只改标题。先改内存让侧栏立刻更新，落库失败再回滚。
+     */
+    fun renameProjectSpace(spaceKey: String, title: String) {
+        val trimmed = title.trim()
+        if (trimmed.isEmpty()) return
+        val previous = projectSpaceOptionsState.value
+        val target = previous.firstOrNull { it.spaceKey == spaceKey } ?: return
+        if (target.title == trimmed) return
+        projectSpaceOptionsState.value = previous.map {
+            if (it.spaceKey == spaceKey) it.copy(title = trimmed) else it
+        }
+        scope.launch(Dispatchers.IO) {
+            val ok = runCatching { ProjectSpaceRepository.rename(spaceKey, trimmed) }.getOrDefault(false)
+            if (ok) {
+                loadProjectSpaces()
+            } else {
+                withContext(Dispatchers.Main) { projectSpaceOptionsState.value = previous }
+            }
+        }
+    }
+
+    /**
+     * 删除项目：删项目行本身，归入它的会话回落到默认工作区，会话不删。
+     */
+    fun deleteProjectSpace(spaceKey: String) {
+        scope.launch(Dispatchers.IO) {
+            val removed = runCatching { ProjectSpaceRepository.delete(spaceKey) }.getOrDefault(false)
+            if (!removed) return@launch
+            runCatching {
+                EtaDatabase.get(appContext).conversationDao().clearConversationSpace(spaceKey)
+            }
+            loadProjectSpaces()
+        }
+    }
+
     suspend fun exportConversationMarkdown(conversationId: String): String? {
         if (conversationId !in conversationsById) return null
         if (!persistConversations().await()) error(appContext.getString(R.string.conversation_persistence_failed))

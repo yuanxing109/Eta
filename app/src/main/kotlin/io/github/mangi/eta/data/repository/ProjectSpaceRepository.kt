@@ -87,6 +87,24 @@ internal object ProjectSpaceRepository {
         return resolve(ProjectSpaceEntity.DEFAULT_SPACE_KEY, identity)
     }
 
+    /**
+     * 重命名项目：只改标题，不动磁盘路径。
+     *
+     * 标题是给人看的标签，路径是身份与目录事实；改名若跟着挪目录，
+     * 已经写进会话里的 cwd、终端里开着的 shell 全部会漂。内置工作区不可改名。
+     */
+    suspend fun rename(spaceKey: String, title: String): Boolean {
+        val dao = database()?.projectSpaceDao() ?: return false
+        val trimmed = title.trim()
+        if (trimmed.isEmpty()) return false
+        val entity = dao.space(spaceKey) ?: return false
+        if (entity.kind == ProjectSpaceKind.BUILTIN) return false
+        if (entity.title == trimmed) return true
+        dao.upsert(entity.copy(title = trimmed))
+        reload()
+        return true
+    }
+
     /** 私有项目：宿主目录在默认工作区之下，Linux 侧是 `/workspace/projects/<slug>` 的子路径。 */
     suspend fun createPrivate(title: String, identity: String): ProjectSpaceRef? {
         val dao = database()?.projectSpaceDao() ?: return null
