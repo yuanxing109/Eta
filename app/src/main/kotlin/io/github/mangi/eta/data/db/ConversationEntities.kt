@@ -9,7 +9,10 @@ import io.github.mangi.eta.data.model.ReasoningEffort
 import kotlinx.serialization.Serializable
 
 @Serializable
-@Entity(tableName = "conversations")
+@Entity(
+    tableName = "conversations",
+    indices = [Index("space_key")],
+)
 internal data class ConversationEntity(
     @PrimaryKey val id: String,
     val title: String,
@@ -25,6 +28,8 @@ internal data class ConversationEntity(
     /** 会话最近使用的本地 Model.id；null 表示跟随默认模型。 */
     @ColumnInfo(name = "model_id") val modelId: String? = null,
     @ColumnInfo(name = "is_pinned", defaultValue = "0") val isPinned: Boolean = false,
+    /** 所属项目空间；null = 尚未归属任何项目（历史会话）。 */
+    @ColumnInfo(name = "space_key") val spaceKey: String? = null,
 )
 
 internal data class ConversationMetadata(
@@ -39,6 +44,8 @@ internal data class ConversationMetadata(
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
     @ColumnInfo(name = "model_id") val modelId: String? = null,
     @ColumnInfo(name = "is_pinned") val isPinned: Boolean = false,
+    /** 所属项目空间；null = 尚未归属任何项目。 */
+    @ColumnInfo(name = "space_key") val spaceKey: String? = null,
 )
 
 /** 会话侧栏只读取定长预览，不读取上下文、角色卡与修订正文。 */

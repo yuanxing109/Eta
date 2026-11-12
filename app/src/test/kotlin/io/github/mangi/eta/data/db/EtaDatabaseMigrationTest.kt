@@ -59,6 +59,7 @@ class EtaDatabaseMigrationTest {
                 EtaDatabase.MIGRATION_22_23,
                 EtaDatabase.MIGRATION_23_24,
                 EtaDatabase.MIGRATION_24_25,
+                EtaDatabase.MIGRATION_25_26,
             )
             .build()
         try {
@@ -137,6 +138,88 @@ class EtaDatabaseMigrationTest {
             assertEquals(
                 listOf(ModelSource.CATALOG, ModelSource.MANUAL),
                 provider.models.map { it.source },
+            )
+        } finally {
+            database.close()
+            context.deleteDatabase(databaseName)
+        }
+    }
+
+    @Test
+    fun migration25To26CreatesProjectSpacesAndBackfillsDefaultWorkspace() {
+        val context = RuntimeEnvironment.getApplication() as Context
+        val databaseName = "migration-${UUID.randomUUID()}.db"
+        createVersion6Database(context, databaseName)
+
+        val database = Room.databaseBuilder(context, EtaDatabase::class.java, databaseName)
+            .addMigrations(
+                EtaDatabase.MIGRATION_6_7,
+                EtaDatabase.MIGRATION_7_8,
+                EtaDatabase.MIGRATION_8_9,
+                EtaDatabase.MIGRATION_9_10,
+                EtaDatabase.MIGRATION_10_11,
+                EtaDatabase.MIGRATION_11_12,
+                EtaDatabase.MIGRATION_12_13,
+                EtaDatabase.MIGRATION_13_14,
+                EtaDatabase.MIGRATION_14_15,
+                EtaDatabase.MIGRATION_15_16,
+                EtaDatabase.MIGRATION_16_17,
+                EtaDatabase.MIGRATION_17_18,
+                EtaDatabase.MIGRATION_18_19,
+                EtaDatabase.MIGRATION_19_20,
+                EtaDatabase.MIGRATION_20_21,
+                EtaDatabase.MIGRATION_21_22,
+                EtaDatabase.MIGRATION_22_23,
+                EtaDatabase.MIGRATION_23_24,
+                EtaDatabase.MIGRATION_24_25,
+                EtaDatabase.MIGRATION_25_26,
+            )
+            .build()
+        try {
+            // 迁移后必须恰好有一个内置默认工作区，字段与实体常量一致。
+            val defaultSpace = runBlocking(Dispatchers.IO) {
+                database.projectSpaceDao().spaces().single()
+            }
+            assertEquals(ProjectSpaceEntity.DEFAULT_SPACE_KEY, defaultSpace.spaceKey)
+            assertEquals(ProjectSpaceKind.BUILTIN, defaultSpace.kind)
+            assertEquals(ProjectSpaceEntity.DEFAULT_HOST_PATH, defaultSpace.hostPath)
+            assertEquals(ProjectSpaceEntity.DEFAULT_LINUX_PATH, defaultSpace.linuxPath)
+            assertEquals(false, defaultSpace.deletable)
+
+            // 历史会话的 space_key 为 null，表示尚未归属任何项目。
+            val legacySpaceKey = database.openHelper.readableDatabase
+                .query("SELECT space_key FROM conversations WHERE id = 'conv-1'")
+                .use { cursor ->
+                    check(cursor.moveToFirst())
+                    if (cursor.isNull(0)) null else cursor.getString(0)
+                }
+            assertEquals(null, legacySpaceKey)
+
+            // 内置项目不可删；普通项目可删。
+            assertEquals(
+                0,
+                runBlocking(Dispatchers.IO) {
+                    database.projectSpaceDao().deleteDeletable(ProjectSpaceEntity.DEFAULT_SPACE_KEY)
+                },
+            )
+            val project = ProjectSpaceEntity(
+                id = "space-test",
+                spaceKey = "space:test",
+                kind = ProjectSpaceKind.PRIVATE,
+                hostPath = "/data/local/tmp/eta/projects/demo-12345678",
+                linuxPath = "/workspace/projects/demo",
+                title = "demo",
+                lastUsedAt = 10,
+                createdAt = 10,
+            )
+            runBlocking(Dispatchers.IO) { database.projectSpaceDao().upsert(project) }
+            assertEquals(
+                listOf(ProjectSpaceEntity.DEFAULT_SPACE_KEY, "space:test"),
+                runBlocking(Dispatchers.IO) { database.projectSpaceDao().spaces() }.map { it.spaceKey },
+            )
+            assertEquals(
+                1,
+                runBlocking(Dispatchers.IO) { database.projectSpaceDao().deleteDeletable("space:test") },
             )
         } finally {
             database.close()
