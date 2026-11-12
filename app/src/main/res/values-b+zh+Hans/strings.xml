@@ -301,6 +301,11 @@
   <string name="time_now">现在</string>
   <string name="conversation_section_pinned">置顶</string>
   <string name="conversation_section_today">今天</string>
+  <string name="action_move_to_space">移到项目</string>
+  <string name="conversation_move_space_title">选择项目</string>
+  <string name="conversation_move_space_default">默认工作区</string>
+  <string name="conversation_move_space_new">新建项目</string>
+  <string name="conversation_move_space_new_hint">项目名称</string>
   <string name="conversation_dock_models">模型</string>
   <string name="conversation_preview_reasoning">Eta 正在思考</string>
   <string name="conversation_preview_tool_call">调用工具：%1$s</string>

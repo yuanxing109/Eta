@@ -70,6 +70,8 @@ internal data class ConversationIdentity(
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
     @ColumnInfo(name = "is_pinned") val isPinned: Boolean = false,
+    /** 所属项目空间；保存队列重建行时要原样带回，否则一次保存就把绑定抹掉。 */
+    @ColumnInfo(name = "space_key") val spaceKey: String? = null,
 )
 
 internal data class ConversationMessageContent(val id: String, val content: String)

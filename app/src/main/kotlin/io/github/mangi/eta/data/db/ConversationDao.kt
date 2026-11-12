@@ -1,12 +1,19 @@
 package io.github.mangi.eta.data.db
 
 import android.database.Cursor
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Upsert
+
+/** 侧栏分组用的轻量投影：只要会话 id 与所属项目。 */
+internal data class ConversationSpaceRow(
+    val id: String,
+    @ColumnInfo(name = "space_key") val spaceKey: String? = null,
+)
 
 @Dao
 internal interface ConversationDao : ChunkedTextDao {
@@ -23,8 +30,18 @@ internal interface ConversationDao : ChunkedTextDao {
     )
     suspend fun conversationIndex(): List<ConversationIndexRow>
 
-    @Query("SELECT id, title, created_at, updated_at, is_pinned FROM conversations")
+    @Query("SELECT id, title, created_at, updated_at, is_pinned, space_key FROM conversations")
     suspend fun conversationIdentities(): List<ConversationIdentity>
+
+    /** 侧栏分组只需要「会话 -> 项目」这一列，不读标题与正文。 */
+    @Query("SELECT id, space_key FROM conversations")
+    suspend fun conversationSpaceRows(): List<ConversationSpaceRow>
+
+    @Query("UPDATE conversations SET space_key = :spaceKey WHERE id = :conversationId")
+    suspend fun updateConversationSpace(conversationId: String, spaceKey: String?)
+
+    @Query("SELECT COUNT(*) FROM conversations WHERE space_key = :spaceKey")
+    suspend fun conversationCountForSpace(spaceKey: String): Int
 
     @Query("UPDATE conversations SET title = :title, updated_at = :updatedAt, is_pinned = :isPinned WHERE id = :conversationId")
     suspend fun updateConversationTitle(conversationId: String, title: String, updatedAt: Long, isPinned: Boolean = false)

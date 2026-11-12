@@ -63,6 +63,7 @@ internal object ConversationBranchRepository {
             roleplayJson = source.roleplayJson,
             revisionsJson = if (source.roleplayJson.isBlank()) "" else json.encodeToString(remappedRoleplay),
             createdAt = now, updatedAt = now,
+            spaceKey = source.spaceKey,
         )))
         dao.updateContextCheckpoint(
             branchId,

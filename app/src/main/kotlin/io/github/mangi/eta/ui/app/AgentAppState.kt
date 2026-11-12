@@ -27,6 +27,9 @@ import io.github.mangi.eta.agent.roleplay.CharacterMacros
 import io.github.mangi.eta.agent.roleplay.CharacterCardCodec
 import io.github.mangi.eta.agent.roleplay.RoleplayMessageLink
 import io.github.mangi.eta.agent.roleplay.RoleplayMessageState
+import io.github.mangi.eta.agent.terminal.TerminalRuntime
+import io.github.mangi.eta.data.db.EtaDatabase
+import io.github.mangi.eta.data.db.ProjectSpaceKind
 import io.github.mangi.eta.data.repository.ConversationBranchUnavailable
 import io.github.mangi.eta.data.repository.CharacterRepository
 import io.github.mangi.eta.agent.runtime.AgentEvent
@@ -50,6 +53,7 @@ import io.github.mangi.eta.data.model.ReasoningEffort
 import io.github.mangi.eta.data.model.enabledModel
 import io.github.mangi.eta.data.repository.EtaBackupRepository
 import io.github.mangi.eta.data.repository.EtaBackupSummary
+import io.github.mangi.eta.data.repository.ProjectSpaceRepository
 import io.github.mangi.eta.data.repository.ProviderRepository
 import io.github.mangi.eta.data.repository.RuntimeConfigRepository
 import io.github.mangi.eta.ui.IncomingShareRequest
@@ -60,6 +64,7 @@ import io.github.mangi.eta.ui.model.AgentModelPickerProjector
 import io.github.mangi.eta.ui.model.AgentModelPickerUiState
 import io.github.mangi.eta.ui.model.ConversationModeUi
 import io.github.mangi.eta.ui.model.ConversationPaneUiState
+import io.github.mangi.eta.ui.model.ConversationSpaceUi
 import io.github.mangi.eta.ui.model.ConversationSummaryUi
 import io.github.mangi.eta.ui.model.ConversationHistoryLoadState
 import io.github.mangi.eta.ui.model.MessageEditUiState
@@ -144,6 +149,11 @@ internal class AgentAppState(
     private var conversationTitles: Map<String, String> = initialConversations.titles
     private var conversationUpdatedAt: Map<String, Long> = initialConversations.updatedAt
     private var conversationPinnedIds: Set<String> = initialConversations.pinnedIds
+    /** 会话 -> 项目空间；null 表示未归属，口径与历史一致，仍按时间分组。 */
+    private var conversationSpaces: Map<String, String?> = emptyMap()
+    /** 侧栏一级分组头的数据；默认工作区不出现在这里，未归属会话保持原有时间分组。 */
+    private val projectSpaceOptionsState = mutableStateOf<List<ConversationSpaceUi>>(emptyList())
+    val projectSpaceOptions: List<ConversationSpaceUi> get() = projectSpaceOptionsState.value
 
     var homeState by mutableStateOf(
         selectedConversationId?.let(conversationsById::get) ?: emptyChatState(defaultThinkingEnabled)
@@ -172,6 +182,7 @@ internal class AgentAppState(
 
     init {
         refreshConversationSummaries()
+        scope.launch(Dispatchers.IO) { loadProjectSpaces() }
         observeRuntimeSelection()
         runtimeRecoveryInProgress.set(true)
         scope.launch(Dispatchers.IO) {
@@ -1172,6 +1183,66 @@ internal class AgentAppState(
         }
         refreshConversationSummaries()
         persistConversations()
+    }
+
+    /**
+     * 分组头与会话绑定分两次查：注册表很小，绑定只取 id + space_key 两列，
+     * 不为侧栏把整段 history_json 拖进来。
+     */
+    private suspend fun loadProjectSpaces() {
+        val spaces = runCatching { ProjectSpaceRepository.reload() }.getOrElse { emptyList() }
+        val bindings = runCatching {
+            EtaDatabase.get(appContext).conversationDao().conversationSpaceRows()
+        }.getOrElse { emptyList() }
+        withContext(Dispatchers.Main) {
+            projectSpaceOptionsState.value = spaces
+                .filter { it.kind != ProjectSpaceKind.BUILTIN }
+                .map { ConversationSpaceUi(spaceKey = it.spaceKey, title = it.title) }
+            conversationSpaces = bindings.associate { it.id to it.spaceKey }
+            refreshConversationSummaries()
+        }
+    }
+
+    fun refreshProjectSpaces() {
+        scope.launch(Dispatchers.IO) { loadProjectSpaces() }
+    }
+
+    /**
+     * 把会话挪到某个项目。先改内存让侧栏立刻分组，再落库；写失败时回滚，
+     * 避免「界面上已移动、重启又回来」的假成功。
+     */
+    fun moveConversationToSpace(conversationId: String, spaceKey: String?) {
+        if (conversationId !in conversationsById) return
+        val target = spaceKey?.takeIf(String::isNotBlank)
+        val previous = conversationSpaces[conversationId]
+        if (previous == target) return
+        conversationSpaces = conversationSpaces + (conversationId to target)
+        refreshConversationSummaries()
+        scope.launch(Dispatchers.IO) {
+            val saved = runCatching {
+                EtaDatabase.get(appContext).conversationDao()
+                    .updateConversationSpace(conversationId, target)
+            }.isSuccess
+            if (!saved) {
+                withContext(Dispatchers.Main) {
+                    conversationSpaces = conversationSpaces + (conversationId to previous)
+                    refreshConversationSummaries()
+                }
+            }
+        }
+    }
+
+    /** 新建项目并（可选）把当前会话直接放进去；身份只决定默认工作区的宿主路径。 */
+    fun createProjectSpace(title: String, bindConversationId: String? = null) {
+        scope.launch(Dispatchers.IO) {
+            val identity = if (TerminalRuntime.rootAvailable) "root" else "user"
+            val created = runCatching { ProjectSpaceRepository.createPrivate(title, identity) }.getOrNull()
+                ?: return@launch
+            loadProjectSpaces()
+            if (bindConversationId != null) {
+                withContext(Dispatchers.Main) { moveConversationToSpace(bindConversationId, created.spaceKey) }
+            }
+        }
     }
 
     suspend fun exportConversationMarkdown(conversationId: String): String? {
@@ -2507,6 +2578,7 @@ internal class AgentAppState(
                     isPinned = id in conversationPinnedIds,
                     characterName = state.roleplay?.characterName ?: state.conversationCharacterName,
                     characterAvatarPath = state.roleplay?.avatarPath ?: state.conversationCharacterAvatarPath,
+                    spaceKey = conversationSpaces[id],
                     isActiveRun = state.isStreaming,
                     runStatus = when (runStore.guiStatus(id)) {
                         GuiControlStatus.Waiting -> appContext.getString(R.string.run_waiting_for_gui)
@@ -2518,6 +2590,7 @@ internal class AgentAppState(
         val query = conversationPaneState.searchQuery.trim()
         conversationPaneState = conversationPaneState.copy(
             selectedConversationId = selectedConversationId,
+            spaces = projectSpaceOptionsState.value,
             conversations = if (query.isBlank()) {
                 summaries
             } else {

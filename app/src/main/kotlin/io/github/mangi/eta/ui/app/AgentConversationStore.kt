@@ -118,6 +118,7 @@ internal object AgentConversationStore {
                                     updatedAt = state.updatedAt.takeIf { it != 0L } ?: System.currentTimeMillis(),
                                     modelId = state.modelId,
                                     isPinned = state.isPinned,
+                                    spaceKey = stored[id]?.spaceKey,
                                 )
                                 phase = "write_metadata"
                                 dao.insertConversations(listOf(row))

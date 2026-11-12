@@ -239,6 +239,11 @@
   <string name="time_now">Now</string>
   <string name="conversation_section_pinned">Pinned</string>
   <string name="conversation_section_today">Today</string>
+  <string name="action_move_to_space">Move to project</string>
+  <string name="conversation_move_space_title">Choose project</string>
+  <string name="conversation_move_space_default">Default workspace</string>
+  <string name="conversation_move_space_new">New project</string>
+  <string name="conversation_move_space_new_hint">Project name</string>
   <string name="conversation_dock_models">Models</string>
   <string name="conversation_preview_reasoning">Eta is reasoning</string>
   <string name="conversation_preview_tool_call">Tool call: %1$s</string>

@@ -24,14 +24,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Shield
@@ -68,6 +70,7 @@ import io.github.mangi.eta.data.model.AppearanceUiStyle
 import io.github.mangi.eta.ui.app.LocalUiStyle
 import io.github.mangi.eta.ui.components.coui.CouiSearchBarBox
 import io.github.mangi.eta.ui.model.ConversationPaneUiState
+import io.github.mangi.eta.ui.model.ConversationSpaceUi
 import io.github.mangi.eta.ui.model.ConversationSummaryUi
 import top.yukonga.miuix.kmp.basic.DropdownDefaults
 import top.yukonga.miuix.kmp.basic.DropdownImpl
@@ -142,6 +145,7 @@ internal fun ConversationPanePanel(
     onConversationRename: (ConversationSummaryUi) -> Unit,
     onConversationExport: (ConversationSummaryUi) -> Unit,
     onConversationDelete: (ConversationSummaryUi) -> Unit,
+    onConversationMoveToSpace: (ConversationSummaryUi) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenModelProviders: () -> Unit,
     onOpenTools: () -> Unit,
@@ -152,7 +156,11 @@ internal fun ConversationPanePanel(
 ) {
     // state.conversations 已由 AgentAppState 按标题、预览与消息内容过滤。
     val query = state.searchQuery.trim()
-    val groups = remember(state.conversations) { state.conversations.groupForDrawer() }
+    // 项目分组默认折叠：会话多时列表首先是一屏分组头，展开才进入组内。
+    var expandedSpaceKeys by remember { mutableStateOf(setOf<String>()) }
+    val entries = remember(state.conversations, state.spaces, expandedSpaceKeys) {
+        buildDrawerEntries(state.conversations, state.spaces, expandedSpaceKeys)
+    }
 
     Surface(
         modifier = modifier
@@ -197,26 +205,40 @@ internal fun ConversationPanePanel(
                         EmptyConversations(isSearching = query.isNotBlank())
                     }
                 } else {
-                    groups.forEachIndexed { groupIndex, group ->
-                        item(key = "section-${group.section}") {
-                            ConversationSectionHeader(
-                                group = group,
-                                isFirstSection = groupIndex == 0,
-                            )
-                        }
-                        items(
-                            items = group.items,
-                            key = { it.id },
-                        ) { conversation ->
-                            ConversationTextRow(
-                                conversation = conversation,
-                                selected = conversation.id == state.selectedConversationId,
-                                onClick = { onConversationSelected(conversation.id) },
-                                onTogglePin = { onConversationTogglePin(conversation) },
-                                onRename = { onConversationRename(conversation) },
-                                onExport = { onConversationExport(conversation) },
-                                onDelete = { onConversationDelete(conversation) },
-                            )
+                    entries.forEachIndexed { entryIndex, entry ->
+                        when (entry) {
+                            is ConversationDrawerEntry.SpaceHeader -> item(key = "space-${entry.space.spaceKey}") {
+                                ConversationSpaceHeader(
+                                    header = entry,
+                                    isFirstSection = entryIndex == 0,
+                                    onToggle = {
+                                        expandedSpaceKeys = if (entry.expanded) {
+                                            expandedSpaceKeys - entry.space.spaceKey
+                                        } else {
+                                            expandedSpaceKeys + entry.space.spaceKey
+                                        }
+                                    },
+                                )
+                            }
+                            is ConversationDrawerEntry.SectionHeader -> item(key = "section-${entry.group.section}") {
+                                ConversationSectionHeader(
+                                    group = entry.group,
+                                    isFirstSection = entryIndex == 0,
+                                )
+                            }
+                            is ConversationDrawerEntry.Conversation -> item(key = entry.conversation.id) {
+                                val conversation = entry.conversation
+                                ConversationTextRow(
+                                    conversation = conversation,
+                                    selected = conversation.id == state.selectedConversationId,
+                                    onClick = { onConversationSelected(conversation.id) },
+                                    onTogglePin = { onConversationTogglePin(conversation) },
+                                    onRename = { onConversationRename(conversation) },
+                                    onExport = { onConversationExport(conversation) },
+                                    onDelete = { onConversationDelete(conversation) },
+                                    onMoveToSpace = { onConversationMoveToSpace(conversation) },
+                                )
+                            }
                         }
                     }
                 }
@@ -322,6 +344,53 @@ private fun ConversationSectionHeader(
     )
 }
 
+@Composable
+private fun ConversationSpaceHeader(
+    header: ConversationDrawerEntry.SpaceHeader,
+    isFirstSection: Boolean,
+    onToggle: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onToggle)
+            .padding(
+                start = ConversationPanelMetrics.RowHorizontalPadding,
+                end = ConversationPanelMetrics.RowHorizontalPadding,
+                top = if (isFirstSection) {
+                    ConversationPanelMetrics.FirstSectionTopPadding
+                } else {
+                    ConversationPanelMetrics.SectionTopPadding
+                },
+                bottom = ConversationPanelMetrics.SectionBottomPadding,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = if (header.expanded) Icons.Filled.FolderOpen else Icons.Outlined.Folder,
+            contentDescription = null,
+            tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = header.space.title,
+            style = MiuixTheme.textStyles.footnote1,
+            fontWeight = FontWeight.SemiBold,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = header.count.toString(),
+            style = MiuixTheme.textStyles.footnote2,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        )
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ConversationTextRow(
@@ -332,6 +401,7 @@ private fun ConversationTextRow(
     onRename: () -> Unit,
     onExport: () -> Unit,
     onDelete: () -> Unit,
+    onMoveToSpace: () -> Unit,
 ) {
     var showActionMenu by remember { mutableStateOf(false) }
     val hapticFeedback = LocalHapticFeedback.current
@@ -446,18 +516,20 @@ private fun ConversationTextRow(
             },
         )
         val renameText = stringResource(R.string.action_rename)
+        val moveSpaceText = stringResource(R.string.action_move_to_space)
         val exportText = stringResource(R.string.action_export)
         val deleteText = stringResource(R.string.action_delete)
         when (LocalUiStyle.current) {
             AppearanceUiStyle.COUI -> {
                 val destructiveColor = CouiDialogDefaults.themeColors().destructive
-                val menuItems = remember(pinText, renameText, exportText, deleteText, destructiveColor) {
+                val menuItems = remember(pinText, renameText, moveSpaceText, exportText, deleteText, destructiveColor) {
                     listOf(
                         CouiMenuItem(value = 0, text = pinText, icon = Icons.Outlined.PushPin),
                         CouiMenuItem(value = 1, text = renameText, icon = Icons.Outlined.Edit),
-                        CouiMenuItem(value = 2, text = exportText, icon = Icons.Outlined.Download),
+                        CouiMenuItem(value = 2, text = moveSpaceText, icon = Icons.Outlined.Folder),
+                        CouiMenuItem(value = 3, text = exportText, icon = Icons.Outlined.Download),
                         CouiMenuItem(
-                            value = 3,
+                            value = 4,
                             text = deleteText,
                             icon = Icons.Outlined.Delete,
                             iconTint = destructiveColor,
@@ -474,8 +546,9 @@ private fun ConversationTextRow(
                         when (item.value) {
                             0 -> onTogglePin()
                             1 -> onRename()
-                            2 -> onExport()
-                            3 -> onDelete()
+                            2 -> onMoveToSpace()
+                            3 -> onExport()
+                            4 -> onDelete()
                         }
                     },
                     anchor = anchor,
@@ -506,6 +579,18 @@ private fun ConversationTextRow(
                             icon = { modifier ->
                                 Icon(
                                     imageVector = Icons.Outlined.Edit,
+                                    contentDescription = null,
+                                    modifier = modifier.size(ConversationPanelMetrics.ActionIconSize),
+                                )
+                            },
+                        )
+                    }
+                    val moveSpaceItem = remember(moveSpaceText) {
+                        DropdownItem(
+                            text = moveSpaceText,
+                            icon = { modifier ->
+                                Icon(
+                                    imageVector = Icons.Outlined.Folder,
                                     contentDescription = null,
                                     modifier = modifier.size(ConversationPanelMetrics.ActionIconSize),
                                 )
@@ -545,7 +630,7 @@ private fun ConversationTextRow(
                     ListPopupColumn {
                         DropdownImpl(
                             item = pinItem,
-                            optionSize = 4,
+                            optionSize = 5,
                             isSelected = false,
                             index = 0,
                             onSelectedIndexChange = {
@@ -555,7 +640,7 @@ private fun ConversationTextRow(
                         )
                         DropdownImpl(
                             item = renameItem,
-                            optionSize = 4,
+                            optionSize = 5,
                             isSelected = false,
                             index = 1,
                             onSelectedIndexChange = {
@@ -564,10 +649,20 @@ private fun ConversationTextRow(
                             },
                         )
                         DropdownImpl(
-                            item = exportItem,
-                            optionSize = 4,
+                            item = moveSpaceItem,
+                            optionSize = 5,
                             isSelected = false,
                             index = 2,
+                            onSelectedIndexChange = {
+                                showActionMenu = false
+                                onMoveToSpace()
+                            },
+                        )
+                        DropdownImpl(
+                            item = exportItem,
+                            optionSize = 5,
+                            isSelected = false,
+                            index = 3,
                             onSelectedIndexChange = {
                                 showActionMenu = false
                                 onExport()
@@ -575,9 +670,9 @@ private fun ConversationTextRow(
                         )
                         DropdownImpl(
                             item = deleteItem,
-                            optionSize = 4,
+                            optionSize = 5,
                             isSelected = false,
-                            index = 3,
+                            index = 4,
                             dropdownColors = deleteColors,
                             onSelectedIndexChange = {
                                 showActionMenu = false
@@ -683,6 +778,51 @@ private fun DockEntry(
             tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
         )
     }
+}
+
+/** 侧栏一条「可渲染行」：项目头、时间分组头、会话行。展开状态只影响条目列表本身。 */
+private sealed interface ConversationDrawerEntry {
+    data class SpaceHeader(
+        val space: ConversationSpaceUi,
+        val count: Int,
+        val expanded: Boolean,
+    ) : ConversationDrawerEntry
+
+    data class SectionHeader(val group: ConversationDrawerGroup) : ConversationDrawerEntry
+
+    data class Conversation(val conversation: ConversationSummaryUi) : ConversationDrawerEntry
+}
+
+/**
+ * 项目分组在前（默认折叠，只在展开时把它们名下的会话铺开），
+ * 未归属/默认工作区的会话随后仍走原来的置顶·今天·日期分组，历史观感不变。
+ */
+private fun buildDrawerEntries(
+    conversations: List<ConversationSummaryUi>,
+    spaces: List<ConversationSpaceUi>,
+    expandedSpaceKeys: Set<String>,
+): List<ConversationDrawerEntry> {
+    if (conversations.isEmpty()) return emptyList()
+    val projectKeys = spaces.mapTo(mutableSetOf()) { it.spaceKey }
+    val bySpace = conversations
+        .filter { it.spaceKey != null && it.spaceKey in projectKeys }
+        .groupBy { it.spaceKey.orEmpty() }
+    val entries = mutableListOf<ConversationDrawerEntry>()
+    for (space in spaces) {
+        val items = bySpace[space.spaceKey].orEmpty()
+        if (items.isEmpty()) continue
+        val expanded = space.spaceKey in expandedSpaceKeys
+        entries += ConversationDrawerEntry.SpaceHeader(space = space, count = items.size, expanded = expanded)
+        if (expanded) items.forEach { entries += ConversationDrawerEntry.Conversation(it) }
+    }
+    conversations
+        .filter { it.spaceKey == null || it.spaceKey !in projectKeys }
+        .groupForDrawer()
+        .forEach { group ->
+            entries += ConversationDrawerEntry.SectionHeader(group)
+            group.items.forEach { entries += ConversationDrawerEntry.Conversation(it) }
+        }
+    return entries
 }
 
 private data class ConversationDrawerGroup(

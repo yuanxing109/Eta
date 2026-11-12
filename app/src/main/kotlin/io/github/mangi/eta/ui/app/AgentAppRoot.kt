@@ -9,11 +9,19 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -27,6 +35,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -105,8 +114,12 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import io.github.mangi.eta.ui.model.ConversationSpaceUi
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.layout.DialogDefaults
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.nav.core.NavDisplay
 import top.yukonga.miuix.kmp.nav.core.NavDisplayEffects
 import top.yukonga.miuix.kmp.nav.core.rememberNavBackStack
@@ -191,6 +204,8 @@ fun AgentAppRoot(
     var conversationRenameTarget by remember { mutableStateOf<ConversationSummaryUi?>(null) }
     var conversationDeleteTarget by remember { mutableStateOf<ConversationSummaryUi?>(null) }
     var conversationExportTarget by remember { mutableStateOf<ConversationSummaryUi?>(null) }
+    var conversationMoveSpaceTarget by remember { mutableStateOf<ConversationSummaryUi?>(null) }
+    var conversationCreateSpaceTarget by remember { mutableStateOf<ConversationSummaryUi?>(null) }
     var messageDeleteTarget by remember { mutableStateOf<MessageMutationTarget?>(null) }
     var messageRegenerateTarget by remember { mutableStateOf<MessageMutationTarget?>(null) }
     val conversationExportLauncher = rememberLauncherForActivityResult(
@@ -363,6 +378,10 @@ fun AgentAppRoot(
             },
             onConversationDelete = { conversation ->
                 conversationDeleteTarget = conversation
+            },
+            onConversationMoveToSpace = { conversation ->
+                agentState.refreshProjectSpaces()
+                conversationMoveSpaceTarget = conversation
             },
             onOpenTools = { pushRoute(AppRoute.Tools) },
             onOpenSkills = { pushRoute(AppRoute.Skills) },
@@ -950,6 +969,102 @@ fun AgentAppRoot(
         }
     }
 
+    conversationMoveSpaceTarget?.let { conversation ->
+        val pickerTitle = stringResource(R.string.conversation_move_space_title)
+        val onPickSpace: (String?) -> Unit = { spaceKey ->
+            agentState.moveConversationToSpace(conversation.id, spaceKey)
+            conversationMoveSpaceTarget = null
+        }
+        val onNewSpace: () -> Unit = {
+            conversationMoveSpaceTarget = null
+            conversationCreateSpaceTarget = conversation
+        }
+        when (LocalUiStyle.current) {
+            AppearanceUiStyle.COUI -> {
+                CouiNoticeDialog(
+                    visible = true,
+                    title = pickerTitle,
+                    message = null,
+                    onDismissRequest = { conversationMoveSpaceTarget = null },
+                ) {
+                    ConversationSpacePicker(
+                        options = agentState.projectSpaceOptions,
+                        selectedSpaceKey = conversation.spaceKey,
+                        onPick = onPickSpace,
+                        onCreateNew = onNewSpace,
+                    )
+                }
+            }
+            AppearanceUiStyle.MIUIX -> {
+                WindowDialog(
+                    show = true,
+                    cornerRadius = DialogDefaults.CornerRadius,
+                    title = pickerTitle,
+                    onDismissRequest = { conversationMoveSpaceTarget = null },
+                ) {
+                    Column(modifier = Modifier.padding(top = 8.dp)) {
+                        ConversationSpacePicker(
+                            options = agentState.projectSpaceOptions,
+                            selectedSpaceKey = conversation.spaceKey,
+                            onPick = onPickSpace,
+                            onCreateNew = onNewSpace,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    conversationCreateSpaceTarget?.let { conversation ->
+        var spaceTitleInput by remember(conversation.id) { mutableStateOf("") }
+        val onCreateSpace: () -> Unit = {
+            val trimmed = spaceTitleInput.trim()
+            if (trimmed.isNotEmpty()) {
+                agentState.createProjectSpace(trimmed, conversation.id)
+                conversationCreateSpaceTarget = null
+            }
+        }
+        when (LocalUiStyle.current) {
+            AppearanceUiStyle.COUI -> {
+                CouiInputDialog(
+                    visible = true,
+                    title = stringResource(R.string.conversation_move_space_new),
+                    value = spaceTitleInput,
+                    onValueChange = { spaceTitleInput = it },
+                    placeholder = stringResource(R.string.conversation_move_space_new_hint),
+                    confirmText = stringResource(R.string.conversation_move_space_new),
+                    confirmEnabled = spaceTitleInput.isNotBlank(),
+                    onConfirm = onCreateSpace,
+                    onDismissRequest = { conversationCreateSpaceTarget = null },
+                )
+            }
+            AppearanceUiStyle.MIUIX -> {
+                WindowDialog(
+                    show = true,
+                    cornerRadius = DialogDefaults.CornerRadius,
+                    title = stringResource(R.string.conversation_move_space_new),
+                    onDismissRequest = { conversationCreateSpaceTarget = null },
+                ) {
+                    Column {
+                        TextField(
+                            value = spaceTitleInput,
+                            onValueChange = { spaceTitleInput = it },
+                            label = stringResource(R.string.conversation_move_space_new_hint),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        MiuixDialogActions(
+                            confirmText = stringResource(R.string.conversation_move_space_new),
+                            confirmEnabled = spaceTitleInput.isNotBlank(),
+                            onCancel = { conversationCreateSpaceTarget = null },
+                            onConfirm = onCreateSpace,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     messageDeleteTarget?.let { target ->
         val summary = if (target.laterTurnCount == 0) {
             stringResource(R.string.conversation_delete_message_body)
@@ -1045,3 +1160,64 @@ private data class MessageMutationTarget(
     val messageId: String,
     val laterTurnCount: Int,
 )
+
+/** 选择项目弹窗里的列表：默认工作区置顶 + 现有项目 + 新建入口。 */
+@Composable
+private fun ConversationSpacePicker(
+    options: List<ConversationSpaceUi>,
+    selectedSpaceKey: String?,
+    onPick: (String?) -> Unit,
+    onCreateNew: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        ConversationSpacePickerRow(
+            title = stringResource(R.string.conversation_move_space_default),
+            selected = selectedSpaceKey == null,
+            onClick = { onPick(null) },
+        )
+        options.forEach { space ->
+            ConversationSpacePickerRow(
+                title = space.title,
+                selected = selectedSpaceKey == space.spaceKey,
+                onClick = { onPick(space.spaceKey) },
+            )
+        }
+        ConversationSpacePickerRow(
+            title = stringResource(R.string.conversation_move_space_new),
+            selected = false,
+            onClick = onCreateNew,
+        )
+    }
+}
+
+@Composable
+private fun ConversationSpacePickerRow(
+    title: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
+        if (selected) {
+            Spacer(Modifier.width(8.dp))
+            Icon(
+                imageVector = Icons.Filled.Check,
+                contentDescription = null,
+                tint = MiuixTheme.colorScheme.primary,
+                modifier = Modifier.width(18.dp),
+            )
+        }
+    }
+}
