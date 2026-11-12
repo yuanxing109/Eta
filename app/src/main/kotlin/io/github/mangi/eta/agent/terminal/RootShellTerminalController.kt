@@ -153,7 +153,7 @@ internal class RootShellTerminalController(
             return errorJson("TERMINAL_CLOSED", "terminal controller 已关闭")
         }
 
-        val mkdirDefault = if (safeCwd == defaultHostWorkspace()) "mkdir -p ${shellQuote(safeCwd)} && " else ""
+        val mkdirDefault = if (safeCwd == defaultHostWorkspace(normalizedIdentity)) "mkdir -p ${shellQuote(safeCwd)} && " else ""
         val probeMarker = TerminalExecutionProbe.marker()
         val setup = "${mkdirDefault}cd ${shellQuote(safeCwd)} && export TERM=dumb NO_COLOR=1 && {\n${TerminalExecutionProbe.script(probeMarker)}\n}"
         val setupResult = runSessionCommand(session, setup, timeoutMs = 5_000)
@@ -525,7 +525,7 @@ internal class RootShellTerminalController(
         environmentPreflight(normalizedIdentity, environment)?.let { return it }
         val safeCwd = normalizeCwd(cwd, environment, normalizedIdentity)
         val timeout = timeoutSeconds.coerceIn(1, MAX_TIMEOUT_SECONDS)
-        val setup = if (safeCwd == defaultHostWorkspace()) "mkdir -p ${shellQuote(safeCwd)} && " else ""
+        val setup = if (safeCwd == defaultHostWorkspace(normalizedIdentity)) "mkdir -p ${shellQuote(safeCwd)} && " else ""
         val probeMarker = TerminalExecutionProbe.marker()
         val fullCommand = "${setup}cd ${shellQuote(safeCwd)} && export TERM=dumb NO_COLOR=1 && {\n${TerminalExecutionProbe.script(probeMarker)}\n$trimmed\n}"
         val result = runText(
@@ -670,12 +670,13 @@ internal class RootShellTerminalController(
     private fun defaultIdentity(environment: TerminalEnvironment): String =
         executionContext.identityFor(environment, rootAvailable())
 
-    private fun defaultHostWorkspace(): String =
-        executionContext.projectHostPath
+    /** 默认宿主根按身份求解：默认工作区在 root/普通身份下本来就是两个目录。 */
+    private fun defaultHostWorkspace(identity: String): String =
+        executionContext.hostWorkspace(identity)
 
     private fun normalizeCwd(cwd: String?, environment: TerminalEnvironment, identity: String): String {
         // 默认工作区改由会话所属项目决定：Linux 用项目 Linux 根，Android 用项目宿主根；未归属项目时回退旧默认。
-        val defaultCwd = if (environment.isLinux) executionContext.projectLinuxPath else executionContext.projectHostPath
+        val defaultCwd = if (environment.isLinux) executionContext.projectLinuxPath else executionContext.hostWorkspace(identity)
         val requested = cwd.orEmpty().ifEmpty { defaultCwd }
         require('\u0000' !in requested && requested.length <= 4096) { "工作目录无效或过长" }
         val environmentPath = when {

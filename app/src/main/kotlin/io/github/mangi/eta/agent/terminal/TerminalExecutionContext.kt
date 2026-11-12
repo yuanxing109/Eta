@@ -1,5 +1,6 @@
 package io.github.mangi.eta.agent.terminal
 
+import io.github.mangi.eta.data.db.ProjectSpaceKind
 import io.github.mangi.eta.data.repository.ProjectSpaceRef
 import java.io.File
 import org.json.JSONObject
@@ -34,6 +35,18 @@ internal data class TerminalExecutionContext(
     /** 会话所属项目在宿主侧的根目录；未归属项目时退回默认 Android 工作区，保持旧行为。 */
     val projectHostPath: String
         get() = projectSpace?.hostPath ?: androidWorkspacePath
+
+    /**
+     * 项目宿主根，按**本次调用的身份**求解。
+     *
+     * 默认工作区的宿主路径本来就依身份不同（root 写 /data/local/tmp/eta，普通身份写 filesDir 私有目录），
+     * 身份可被单次调用覆盖时不能复用构造时算出的 [projectHostPath]；
+     * 用户自选的私有/外部项目路径与身份无关，原样返回。
+     */
+    fun hostWorkspace(identity: String): String {
+        val space = projectSpace ?: return androidWorkspacePath
+        return if (space.kind == ProjectSpaceKind.BUILTIN) TerminalRuntime.workspace(identity) else space.hostPath
+    }
 
     /** 会话所属项目在 Linux 侧的根目录；未归属项目时退回默认 Linux 工作区，保持旧行为。 */
     val projectLinuxPath: String
