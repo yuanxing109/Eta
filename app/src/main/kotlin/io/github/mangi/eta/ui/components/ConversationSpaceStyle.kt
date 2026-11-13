@@ -118,7 +118,7 @@ internal fun ConversationSpaceLabel(
     when (LocalUiStyle.current) {
         AppearanceUiStyle.COUI -> CouiText(
             text = text,
-            kind = CouiTextKind.PreferenceTitle,
+            kind = CouiTextKind.GroupTitle,
             color = tokens.titleColor,
             maxLines = maxLines,
             overflow = TextOverflow.Ellipsis,
@@ -163,7 +163,7 @@ internal fun ConversationSpaceGlyph(
 /**
  * 工作区内的会话行标题。
  *
- * COUI 走 `CouiTextKind.Body`（正文光学尺寸），Miuix 走 body1/15sp；选中态在两套风格下都
+ * COUI 走 `CouiTextKind.ItemTitle`（列表项主文字），Miuix 走 body1/15sp；选中态在两套风格下都
  * 由背景色 + 色值表达，Miuix 额外加粗，COUI 不叠字重（其字体族本身已有层级）。
  */
 @Composable
@@ -176,7 +176,7 @@ internal fun ConversationSpaceRowTitle(
     when (LocalUiStyle.current) {
         AppearanceUiStyle.COUI -> CouiText(
             text = text,
-            kind = CouiTextKind.Body,
+            kind = CouiTextKind.ItemTitle,
             color = color,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -194,7 +194,7 @@ internal fun ConversationSpaceRowTitle(
     }
 }
 
-/** 工作区内的会话行次要行（角色名 / 运行状态）：COUI 走 preference summary，Miuix 走 footnote1/12sp。 */
+/** 工作区内的会话行次要行（角色名 / 运行状态）：COUI 走 item summary，Miuix 走 footnote1/12sp。 */
 @Composable
 internal fun ConversationSpaceRowCaption(
     text: String,
@@ -204,7 +204,7 @@ internal fun ConversationSpaceRowCaption(
     when (LocalUiStyle.current) {
         AppearanceUiStyle.COUI -> CouiText(
             text = text,
-            kind = CouiTextKind.PreferenceSummary,
+            kind = CouiTextKind.ItemSummary,
             color = color,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
