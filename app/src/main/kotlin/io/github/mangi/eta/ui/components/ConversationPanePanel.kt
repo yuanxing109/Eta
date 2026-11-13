@@ -142,7 +142,7 @@ internal fun ConversationPanePanel(
     onNewConversationInSpace: (ConversationSpaceUi) -> Unit = {},
     onOpenProjectInTerminal: (ConversationSpaceUi) -> Unit = {},
     onRenameProjectSpace: (ConversationSpaceUi) -> Unit = {},
-    onRelocateProjectSpace: (ConversationSpaceUi) -> Unit,
+    onRelocateProjectSpace: (ConversationSpaceUi) -> Unit = {},
     onDeleteProjectSpace: (ConversationSpaceUi) -> Unit = {},
     onCreateProject: () -> Unit = {},
     onOpenSettings: () -> Unit,
