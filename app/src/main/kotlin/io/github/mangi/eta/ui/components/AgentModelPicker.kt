@@ -108,6 +108,8 @@ internal fun AgentTopBarChatHeader(
     isStreaming: Boolean,
     onModelSelected: (String) -> Unit,
     onOpenCharacter: () -> Unit,
+    spaceTitle: String? = null,
+    onSwitchSpace: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var showPopup by remember { mutableStateOf(false) }
@@ -244,6 +246,24 @@ internal fun AgentTopBarChatHeader(
                         chevronColor = chevronColor,
                         showChevron = enabled,
                     )
+                    if (!spaceTitle.isNullOrBlank()) {
+                        Text(
+                            text = spaceTitle,
+                            style = MiuixTheme.textStyles.footnote2.copy(fontSize = 10.5.sp, lineHeight = 12.sp),
+                            color = subtitleColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .padding(top = 1.dp)
+                                .clip(RoundedCornerShape(5.dp))
+                                .clickable(enabled = onSwitchSpace != null) { onSwitchSpace?.invoke() }
+                                .background(
+                                    color = ink.copy(alpha = if (isDark) 0.10f else 0.06f),
+                                    shape = RoundedCornerShape(5.dp),
+                                )
+                                .padding(horizontal = 5.dp, vertical = 1.dp),
+                        )
+                    }
                 }
             }
 

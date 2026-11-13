@@ -252,6 +252,9 @@
   <string name="project_rename">Rename workspace</string>
   <string name="project_delete">Delete workspace</string>
   <string name="project_delete_message">The workspace is removed. Its conversations fall back to the default workspace; the conversations themselves are kept.</string>
+  <string name="project_relocate">Relocate workspace</string>
+  <string name="project_relocate_hint">New absolute path of the folder</string>
+  <string name="project_relocate_message">Point the workspace at the new folder location. Only the pointer changes; nothing is copied.</string>
   <string name="project_rename_hint">Workspace name</string>
   <string name="conversation_dock_models">Models</string>
   <string name="conversation_preview_reasoning">Eta is reasoning</string>

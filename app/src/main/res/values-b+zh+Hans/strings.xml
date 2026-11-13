@@ -314,6 +314,9 @@
   <string name="project_rename">重命名工作区</string>
   <string name="project_delete">删除工作区</string>
   <string name="project_delete_message">工作区会被移除，归入其中的会话回落到默认工作区，会话本身不会删除。</string>
+  <string name="project_relocate">重新定位工作区</string>
+  <string name="project_relocate_hint">文件夹新的绝对路径</string>
+  <string name="project_relocate_message">文件夹被改名或搬走后，把工作区指回新的绝对路径。只改指向，不复制任何内容。</string>
   <string name="project_rename_hint">工作区名称</string>
   <string name="conversation_dock_models">模型</string>
   <string name="conversation_preview_reasoning">Eta 正在思考</string>

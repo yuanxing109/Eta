@@ -149,6 +149,7 @@ internal fun ConversationPanePanel(
     onNewConversationInSpace: (ConversationSpaceUi) -> Unit,
     onOpenProjectInTerminal: (ConversationSpaceUi) -> Unit,
     onRenameProjectSpace: (ConversationSpaceUi) -> Unit,
+    onRelocateProjectSpace: (ConversationSpaceUi) -> Unit,
     onDeleteProjectSpace: (ConversationSpaceUi) -> Unit,
     onCreateProject: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -248,6 +249,7 @@ internal fun ConversationPanePanel(
                                     onNewConversation = { onNewConversationInSpace(entry.space) },
                                     onOpenInTerminal = { onOpenProjectInTerminal(entry.space) },
                                     onRename = { onRenameProjectSpace(entry.space) },
+                                    onRelocate = { onRelocateProjectSpace(entry.space) },
                                     onDelete = { onDeleteProjectSpace(entry.space) },
                                 )
                             }
@@ -359,6 +361,7 @@ private fun ConversationSpaceHeader(
     onNewConversation: () -> Unit,
     onOpenInTerminal: () -> Unit,
     onRename: () -> Unit,
+    onRelocate: () -> Unit,
     onDelete: () -> Unit,
 ) {
     var showSpaceMenu by remember { mutableStateOf(false) }
@@ -414,6 +417,10 @@ private fun ConversationSpaceHeader(
             onRename = {
                 showSpaceMenu = false
                 onRename()
+            },
+            onRelocate = {
+                showSpaceMenu = false
+                onRelocate()
             },
             onDelete = {
                 showSpaceMenu = false
@@ -951,22 +958,25 @@ private fun ProjectSpaceMenu(
     canManage: Boolean,
     onOpenInTerminal: () -> Unit,
     onRename: () -> Unit,
+    onRelocate: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val terminalText = stringResource(R.string.project_open_in_terminal)
     val renameText = stringResource(R.string.project_rename)
+    val relocateText = stringResource(R.string.project_relocate)
     val deleteText = stringResource(R.string.project_delete)
     when (LocalUiStyle.current) {
         AppearanceUiStyle.COUI -> {
             val destructiveColor = CouiDialogDefaults.themeColors().destructive
-            val items = remember(terminalText, renameText, deleteText, destructiveColor, canManage) {
+            val items = remember(terminalText, renameText, relocateText, deleteText, destructiveColor, canManage) {
                 buildList {
                     add(CouiMenuItem(value = 0, text = terminalText, icon = Icons.Outlined.Terminal))
                     if (canManage) {
                         add(CouiMenuItem(value = 1, text = renameText, icon = Icons.Outlined.Edit))
+                        add(CouiMenuItem(value = 2, text = relocateText, icon = Icons.Outlined.Folder))
                         add(
                             CouiMenuItem(
-                                value = 2,
+                                value = 3,
                                 text = deleteText,
                                 icon = Icons.Outlined.Delete,
                                 iconTint = destructiveColor,
@@ -984,6 +994,7 @@ private fun ProjectSpaceMenu(
                     when (item.value) {
                         0 -> onOpenInTerminal()
                         1 -> onRename()
+                        2 -> onRelocate()
                         else -> onDelete()
                     }
                 },
@@ -991,7 +1002,7 @@ private fun ProjectSpaceMenu(
             )
         }
         AppearanceUiStyle.MIUIX -> {
-            val optionSize = if (canManage) 3 else 1
+            val optionSize = if (canManage) 4 else 1
             WindowListPopup(
                 show = expanded,
                 popupPositionProvider = ListPopupDefaults.ContextMenuPositionProvider,
@@ -1014,6 +1025,13 @@ private fun ProjectSpaceMenu(
                             index = 1,
                             onSelectedIndexChange = { onRename() },
                         )
+                        DropdownImpl(
+                            item = DropdownItem(text = relocateText),
+                            optionSize = optionSize,
+                            isSelected = false,
+                            index = 2,
+                            onSelectedIndexChange = { onRelocate() },
+                        )
                         val deleteColors = DropdownDefaults.dropdownColors(
                             contentColor = MiuixTheme.colorScheme.error,
                             selectedContentColor = MiuixTheme.colorScheme.error,
@@ -1023,7 +1041,7 @@ private fun ProjectSpaceMenu(
                             item = DropdownItem(text = deleteText),
                             optionSize = optionSize,
                             isSelected = false,
-                            index = 2,
+                            index = 3,
                             dropdownColors = deleteColors,
                             onSelectedIndexChange = { onDelete() },
                         )
