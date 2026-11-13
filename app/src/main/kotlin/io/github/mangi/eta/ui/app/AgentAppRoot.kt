@@ -395,7 +395,8 @@ fun AgentAppRoot(
             onOpenProjectInTerminal = { space ->
                 val ref = ProjectSpaceRepository.cached().firstOrNull { it.spaceKey == space.spaceKey }
                 if (ref != null) {
-                    PendingTerminalWorkspace.request(ref.hostPath)
+                    PendingTerminalWorkspace.request(ref.hostPath, ref.linuxPath)
+                    appViewModel.consoleStore.openInRequestedWorkspace()
                     pushRoute(AppRoute.Terminal)
                 }
             },

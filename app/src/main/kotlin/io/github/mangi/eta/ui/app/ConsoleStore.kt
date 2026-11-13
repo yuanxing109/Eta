@@ -18,7 +18,6 @@ import io.github.mangi.eta.agent.terminal.ptySupported
 import io.github.mangi.eta.agent.terminal.terminalEnvironment
 import io.github.mangi.eta.core.AndroidAgentLogger
 import io.github.mangi.eta.data.repository.LinuxEnvironmentSettingsRepository
-import io.github.mangi.eta.data.repository.ProjectSpaceRepository
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -155,6 +154,11 @@ internal class ConsoleStore(
         if (cols <= 0 || rows <= 0) return
         lastCols = cols
         lastRows = rows
+        // 「在终端里打开项目」必须建新会话：复用旧会话会停在上一个目录里。
+        if (!creatingSession && PendingTerminalWorkspace.peek() != null) {
+            createSession(environment, cols, rows)
+            return
+        }
         val state = _uiState.value
         val activeId = state.activeSessionId
         if (activeId != null && controller.sessionAlive(activeId)) {
@@ -170,6 +174,16 @@ internal class ConsoleStore(
             }
         }
         createSession(environment, cols, rows)
+    }
+
+    /** 在 UI 暂存的项目目录里直接新开一个会话（「在终端里打开项目」）。 */
+    fun openInRequestedWorkspace() {
+        if (creatingSession) return
+        createSession(
+            environment = _uiState.value.environment,
+            cols = lastCols.coerceAtLeast(80),
+            rows = lastRows.coerceAtLeast(24),
+        )
     }
 
     /** 以当前环境与最近一次网格尺寸新建会话。 */
@@ -350,9 +364,6 @@ internal class ConsoleStore(
         } else null
         // 「在项目里打开终端」时，UI 会先把项目宿主路径暂存到这里；首次建会话消费一次作为初始目录与挂载源。
         val pendingWorkspace = PendingTerminalWorkspace.consume()
-        val pendingLinuxPath = pendingWorkspace?.let { host ->
-            ProjectSpaceRepository.cached().firstOrNull { it.hostPath == host }?.linuxPath
-        }
         val result = try {
             controller.open(
                 environment = environment,
@@ -364,8 +375,8 @@ internal class ConsoleStore(
                     lease?.release()
                     onExit(sessionId)
                 },
-                linuxHostWorkspacePath = pendingWorkspace,
-                linuxDefaultCwd = pendingLinuxPath,
+                linuxHostWorkspacePath = pendingWorkspace?.hostPath,
+                linuxDefaultCwd = pendingWorkspace?.linuxPath,
             )
         } catch (failure: Throwable) {
             lease?.release()

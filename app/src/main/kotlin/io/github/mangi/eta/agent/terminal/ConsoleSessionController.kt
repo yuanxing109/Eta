@@ -60,7 +60,8 @@ internal class ConsoleSessionController(
         onOutput: (sessionId: String, chunk: ByteArray) -> Unit,
         onExit: (sessionId: String) -> Unit,
         identity: String? = null,
-        // 宿主侧 workspace 源（bind 到 rootfs 的 /workspace）。null 时用后端默认，行为与旧版一致。
+        // 宿主侧 workspace 源：Linux 下 bind 到 rootfs 的 /workspace，Android 下直接作为初始目录。
+        // null 时用后端默认，行为与旧版一致。
         linuxHostWorkspacePath: String? = null,
         // 会话初始工作目录（rootfs 内）。null 时回落 /workspace，与旧版写死值一致。
         linuxDefaultCwd: String? = null,
@@ -125,7 +126,8 @@ internal class ConsoleSessionController(
             val defaultCwd = if (environment.isLinux) {
                 linuxDefaultCwd ?: TerminalRuntime.LINUX_WORKSPACE_PATH
             } else {
-                TerminalRuntime.workspace(identity)
+                // Android 环境没有 rootfs 内路径的概念，项目宿主目录就是它的初始目录。
+                linuxHostWorkspacePath ?: TerminalRuntime.workspace(identity)
             }
             val bootstrap = "mkdir -p ${shellQuote(defaultCwd)}; " +
                 "[ -f /etc/profile ] && . /etc/profile; " +

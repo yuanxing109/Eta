@@ -59,6 +59,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.itos.coui.dialog.CouiDialogDefaults
@@ -249,13 +250,14 @@ internal fun ConversationPanePanel(
                                     onDelete = { onDeleteProjectSpace(entry.space) },
                                 )
                             }
-                            is ConversationDrawerEntry.SectionHeader -> item(key = "section-${entry.group.section}") {
+                            is ConversationDrawerEntry.SectionHeader ->
+                                item(key = "section-${entry.spaceKey}-${entry.group.section}") {
                                 ConversationSectionHeader(
                                     group = entry.group,
                                     isFirstSection = entryIndex == 0,
                                     nested = entry.nested,
                                 )
-                            }
+                                }
                             is ConversationDrawerEntry.Conversation -> item(key = entry.conversation.id) {
                                 val conversation = entry.conversation
                                 ConversationTextRow(
@@ -267,6 +269,7 @@ internal fun ConversationPanePanel(
                                     onExport = { onConversationExport(conversation) },
                                     onDelete = { onConversationDelete(conversation) },
                                     onMoveToSpace = { onConversationMoveToSpace(conversation) },
+                                    startPadding = if (entry.nested) ConversationNestedRowIndent else 0.dp,
                                 )
                             }
                         }
@@ -473,6 +476,7 @@ private fun ConversationTextRow(
     onExport: () -> Unit,
     onDelete: () -> Unit,
     onMoveToSpace: () -> Unit,
+    startPadding: Dp = 0.dp,
 ) {
     var showActionMenu by remember { mutableStateOf(false) }
     val hapticFeedback = LocalHapticFeedback.current
@@ -485,6 +489,7 @@ private fun ConversationTextRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(start = startPadding)
                 .heightIn(min = ConversationPanelMetrics.RowMinHeight)
                 .couiMenuAnchor(anchor)
                 .then(
@@ -861,11 +866,17 @@ private sealed interface ConversationDrawerEntry {
 
     data class SectionHeader(
         val group: ConversationDrawerGroup,
-        /** 默认工作区组内嵌的时间分组，渲染时左缩进一级。 */
+        /** 组内嵌的时间分组，渲染时左缩进一级。 */
         val nested: Boolean = false,
+        /** 所属项目；同一 section 在多个项目里各有一份，item key 要靠它区分。 */
+        val spaceKey: String? = null,
     ) : ConversationDrawerEntry
 
-    data class Conversation(val conversation: ConversationSummaryUi) : ConversationDrawerEntry
+    data class Conversation(
+        val conversation: ConversationSummaryUi,
+        /** 组内的会话行，渲染时左缩进，形成树形层级。 */
+        val nested: Boolean = false,
+    ) : ConversationDrawerEntry
 }
 
 /**
@@ -879,7 +890,8 @@ private fun buildDrawerEntries(
     collapsedSpaceKeys: Set<String>,
     query: String = "",
 ): List<ConversationDrawerEntry> {
-    if (conversations.isEmpty()) return emptyList()
+    // 一个会话都没有、也没有用户项目时，交给空态提示；否则至少要给「新建项目」留位置。
+    if (conversations.isEmpty() && spaces.none { !it.isDefault }) return emptyList()
     val normalizedQuery = query.trim()
     val searchActive = normalizedQuery.isNotEmpty()
     fun ConversationSummaryUi.matchesSearch(): Boolean =
@@ -903,8 +915,14 @@ private fun buildDrawerEntries(
         )
         if (defaultExpanded) {
             defaultItems.groupForDrawer().forEach { group ->
-                entries += ConversationDrawerEntry.SectionHeader(group = group, nested = true)
-                group.items.forEach { entries += ConversationDrawerEntry.Conversation(it) }
+                entries += ConversationDrawerEntry.SectionHeader(
+                    group = group,
+                    nested = true,
+                    spaceKey = defaultSpace.spaceKey,
+                )
+                group.items.forEach {
+                    entries += ConversationDrawerEntry.Conversation(it, nested = true)
+                }
             }
         }
     }
@@ -917,11 +935,23 @@ private fun buildDrawerEntries(
         val spaceTitleHit = searchActive && space.title.contains(normalizedQuery, ignoreCase = true)
         val items = bySpace[space.spaceKey].orEmpty()
             .let { if (!searchActive || spaceTitleHit) it else it.filter { c -> c.matchesSearch() } }
-        if (items.isEmpty()) continue
+        // 空项目也要占位，否则「新建项目」点完像没生效；搜索时只留下命中的组。
+        if (items.isEmpty() && searchActive && !spaceTitleHit) continue
         // 搜索命中的项目组强制展开，但不改写用户手动的 expandedSpaceKeys。
         val expanded = if (searchActive) true else space.spaceKey in expandedSpaceKeys
         entries += ConversationDrawerEntry.SpaceHeader(space = space, count = items.size, expanded = expanded)
-        if (expanded) items.forEach { entries += ConversationDrawerEntry.Conversation(it) }
+        if (!expanded) continue
+        // 组内沿用置顶·今天·日期分组，让项目里的会话也呈树形，而不是一条平铺列表。
+        items.groupForDrawer().forEach { group ->
+            entries += ConversationDrawerEntry.SectionHeader(
+                group = group,
+                nested = true,
+                spaceKey = space.spaceKey,
+            )
+            group.items.forEach {
+                entries += ConversationDrawerEntry.Conversation(it, nested = true)
+            }
+        }
     }
     return entries
 }
@@ -976,6 +1006,9 @@ private fun isUpdatedToday(timestampMillis: Long): Boolean {
 
 /** 默认工作区组内的时间分组缩进量。 */
 private val NestedSectionIndent = 12.dp
+
+/** 组内会话行的左缩进：比时间分组头再深一级，读起来像树。 */
+private val ConversationNestedRowIndent = 22.dp
 
 @Composable
 private fun HeaderIconButton(

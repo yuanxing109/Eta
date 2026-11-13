@@ -1,19 +1,27 @@
 package io.github.mangi.eta.agent.terminal
 
 /**
- * 「在项目里打开终端」的一次性握手槽。
+ * 「在项目里打开终端」的一次性交接。
  *
- * UI 侧发起该动作时先把项目的宿主绝对路径 [request] 暂存到这里；控制台首次建会话时
- * [consume] 读取一次并清空，随后作为该会话的初始工作目录与挂载源传入
- * [ConsoleSessionController.open]（linuxHostWorkspacePath / linuxDefaultCwd）。
- * 只消费一次，避免后续普通新建终端被上一次的项目路径污染。
+ * UI 先把项目路径放进来，终端建会话时消费一次：宿主路径当 bind 源，rootfs 内路径当初始 cwd。
+ * 用一次性值而不是全局设置，是为了不污染之后用户手动开的普通会话。
  */
 internal object PendingTerminalWorkspace {
-    @Volatile private var hostPath: String? = null
+    internal data class Workspace(val hostPath: String, val linuxPath: String?)
 
-    fun request(path: String?) {
-        hostPath = path?.takeIf { it.isNotBlank() }
+    @Volatile
+    private var pending: Workspace? = null
+
+    fun request(hostPath: String, linuxPath: String?) {
+        val host = hostPath.trim()
+        pending = if (host.isEmpty()) null else Workspace(host, linuxPath?.takeIf { it.isNotBlank() })
     }
 
-    fun consume(): String? = hostPath.also { hostPath = null }
+    fun peek(): Workspace? = pending
+
+    fun consume(): Workspace? {
+        val value = pending
+        pending = null
+        return value
+    }
 }
