@@ -466,16 +466,17 @@ private fun CouiWorkbenchRow(
         Spacer(Modifier.width(ConversationPanelMetrics.WorkbenchIconGap))
         CouiText(
             text = entry.title,
-            kind = CouiTextKind.Body,
+            kind = CouiTextKind.ItemTitle,
             color = colors.title,
             modifier = Modifier.weight(1f),
+            textAlign = TextAlign.Start,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
         if (!entry.trailingValue.isNullOrEmpty()) {
             CouiText(
                 text = entry.trailingValue,
-                kind = CouiTextKind.PreferenceValue,
+                kind = CouiTextKind.ItemValue,
                 color = colors.summary,
                 modifier = Modifier
                     .widthIn(max = 136.dp)
@@ -486,7 +487,7 @@ private fun CouiWorkbenchRow(
             )
         }
         CouiIcon(
-            imageVector = CouiIcons.Next,
+            imageVector = CouiIcons.Outlined.Next,
             contentDescription = null,
             modifier = Modifier
                 .padding(start = 6.dp)

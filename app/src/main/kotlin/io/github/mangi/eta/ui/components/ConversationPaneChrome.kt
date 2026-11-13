@@ -5,8 +5,11 @@ import android.graphics.LinearGradient
 import android.graphics.RenderEffect as AndroidRenderEffect
 import android.graphics.Shader
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -48,6 +51,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -82,7 +86,9 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -101,7 +107,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itos.coui.backdrop.CouiBackdrop
 import com.itos.coui.backdrop.ProvideCouiBackdrop
+import com.itos.coui.backdrop.couiBackdrop
 import com.itos.coui.backdrop.drawCouiBackdrop
+import com.itos.coui.backdrop.rememberCouiBackdrop
 import com.itos.coui.effect.CouiFloatingRenderer
 import com.itos.coui.effect.CouiFloatingSurface
 import com.itos.coui.effect.LocalCouiContourGlowEnabled
@@ -115,6 +123,8 @@ import com.itos.coui.motion.couiPressMotion
 import com.itos.coui.motion.couiTouchMotion
 import com.itos.coui.motion.rememberCouiPressMotion
 import com.itos.coui.motion.rememberCouiTouchMotion
+import com.itos.coui.search.SearchBar
+import com.itos.coui.search.rememberCouiSearchBarState
 import com.itos.coui.shape.CouiCapsuleShape
 import com.itos.coui.text.CouiTextKind
 import com.itos.coui.text.Text as CouiText
@@ -307,7 +317,7 @@ private fun PaneBrandHeader(modifier: Modifier = Modifier) {
         if (isCoui) {
             CouiText(
                 text = stringResource(R.string.app_name),
-                kind = CouiTextKind.SectionTitle,
+                kind = CouiTextKind.TopBar,
                 color = CouiPageDefaults.themeColors(dark).title,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -418,6 +428,7 @@ internal fun ConversationPaneBottomDock(
 
     val isCoui = LocalUiStyle.current == AppearanceUiStyle.COUI
     val view = LocalView.current
+    val couiDark = CouiTheme.isDark
     val activeMiuixBackdrop = if (
         !isCoui &&
         LocalBlurEnabled.current &&
@@ -428,117 +439,262 @@ internal fun ConversationPaneBottomDock(
         null
     }
     val activeCouiBackdrop = if (isCoui && view.display != null) couiBackdrop else null
+    val couiDockBackdrop = rememberCouiBackdrop(parent = activeCouiBackdrop)
 
     val bottomScrimBrush = remember(containerColor) {
         Brush.verticalGradient(
             0.0f to Color.Transparent,
-            0.22f to containerColor.copy(alpha = 0.68f),
-            0.52f to containerColor.copy(alpha = 0.94f),
+            0.25f to containerColor.copy(alpha = 0.72f),
+            0.55f to containerColor.copy(alpha = 0.94f),
             1.0f to containerColor,
         )
     }
 
-    val backdropModifier = when {
-        activeMiuixBackdrop != null -> {
-            Modifier
-                .progressiveTextureBlur(
-                    backdrop = activeMiuixBackdrop,
-                    shape = RectangleShape,
-                    gradient = ProgressiveBlur.Bottom.copy(curve = 2.1f),
-                    blurRadius = 22f,
-                    colors = BlurColors(
-                        blendColors = listOf(
-                            BlendColorEntry(containerColor.copy(alpha = 0.64f)),
+    val couiBlurModifier = if (activeCouiBackdrop != null) {
+        // 底部羽化高斯模糊：仅在独立背景层上采样 activeCouiBackdrop 并写入 couiDockBackdrop，
+        // 前景 SearchBar 与圆形按钮作为兄弟节点消费 couiDockBackdrop，避免 RenderNode 循环引用。
+        Modifier.drawCouiBackdrop(
+            backdrop = activeCouiBackdrop,
+            shape = { RectangleShape },
+            effects = {
+                if (size.width > 0f && size.height > 0f) {
+                    val blurPx = (18.dp.toPx()).coerceAtLeast(1f)
+                    padding = kotlin.math.ceil(blurPx)
+                    val blurred = AndroidRenderEffect.createBlurEffect(
+                        blurPx,
+                        blurPx,
+                        Shader.TileMode.CLAMP,
+                    )
+                    val fadeTop = padding
+                    val fadeBottom = padding + size.height * 0.55f
+                    val mask = AndroidRenderEffect.createShaderEffect(
+                        LinearGradient(
+                            0f,
+                            fadeTop,
+                            0f,
+                            fadeBottom.coerceAtLeast(fadeTop + 1f),
+                            intArrayOf(
+                                android.graphics.Color.TRANSPARENT,
+                                android.graphics.Color.argb(180, 0, 0, 0),
+                                android.graphics.Color.BLACK,
+                            ),
+                            floatArrayOf(0f, 0.45f, 1f),
+                            Shader.TileMode.CLAMP,
                         ),
-                    ),
-                )
-                .background(bottomScrimBrush)
-        }
-        activeCouiBackdrop != null -> {
-            // 底部羽化高斯模糊：将滑入底栏下方的列表文字先虚化再经渐隐遮罩吸收，
-            // 既保留 COUI 悬浮玻璃胶囊的边缘光学，又避免清晰文字穿透到搜索图标下方干扰阅读。
-            Modifier
-                .drawCouiBackdrop(
-                    backdrop = activeCouiBackdrop,
-                    shape = { RectangleShape },
-                    effects = {
-                        if (size.width > 0f && size.height > 0f) {
-                            val blurPx = (16.dp.toPx()).coerceAtLeast(1f)
-                            padding = kotlin.math.ceil(blurPx)
-                            val blurred = AndroidRenderEffect.createBlurEffect(
-                                blurPx,
-                                blurPx,
-                                Shader.TileMode.CLAMP,
-                            )
-                            val fadeTop = padding
-                            val fadeBottom = padding + size.height * 0.48f
-                            val mask = AndroidRenderEffect.createShaderEffect(
-                                LinearGradient(
-                                    0f,
-                                    fadeTop,
-                                    0f,
-                                    fadeBottom.coerceAtLeast(fadeTop + 1f),
-                                    intArrayOf(
-                                        android.graphics.Color.TRANSPARENT,
-                                        android.graphics.Color.argb(180, 0, 0, 0),
-                                        android.graphics.Color.BLACK,
-                                    ),
-                                    floatArrayOf(0f, 0.45f, 1f),
-                                    Shader.TileMode.CLAMP,
-                                ),
-                            )
-                            renderEffect = AndroidRenderEffect
-                                .createBlendModeEffect(blurred, mask, AndroidBlendMode.DST_IN)
-                                .asComposeRenderEffect()
-                        }
-                    },
-                )
-                .background(bottomScrimBrush)
-        }
-        else -> Modifier.background(bottomScrimBrush)
+                    )
+                    val maskedBlur = AndroidRenderEffect.createBlendModeEffect(
+                        blurred,
+                        mask,
+                        AndroidBlendMode.DST_IN,
+                    )
+                    val base = AndroidRenderEffect.createOffsetEffect(0f, 0f)
+                    renderEffect = AndroidRenderEffect
+                        .createBlendModeEffect(base, maskedBlur, AndroidBlendMode.SRC_OVER)
+                        .asComposeRenderEffect()
+                }
+            },
+        )
+    } else {
+        Modifier
     }
+
+    val miuixOrFallbackBackdropModifier = if (activeMiuixBackdrop != null) {
+        Modifier
+            .progressiveTextureBlur(
+                backdrop = activeMiuixBackdrop,
+                shape = RectangleShape,
+                gradient = ProgressiveBlur.Bottom.copy(curve = 2.1f),
+                blurRadius = 22f,
+                colors = BlurColors(
+                    blendColors = listOf(
+                        BlendColorEntry(containerColor.copy(alpha = 0.64f)),
+                    ),
+                ),
+            )
+            .background(bottomScrimBrush)
+    } else if (activeCouiBackdrop == null) {
+        Modifier.background(bottomScrimBrush)
+    } else {
+        Modifier
+    }
+
+    val canUseCouiNativeSearchBar = remember(isCoui, activeCouiBackdrop) {
+        isCoui &&
+            activeCouiBackdrop != null &&
+            Build.VERSION.SDK_INT >= 34 &&
+            runCatching { CouiFloatingRenderer.pair() }.isSuccess
+    }
+    var searchExpanded by rememberSaveable { mutableStateOf(false) }
+    val searchState = rememberCouiSearchBarState(searchExpanded)
+    val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(query, canUseCouiNativeSearchBar) {
+        if (canUseCouiNativeSearchBar && query.isNotEmpty() && !searchExpanded) {
+            searchExpanded = true
+        }
+    }
+    BackHandler(enabled = canUseCouiNativeSearchBar && searchExpanded) {
+        searchExpanded = false
+        onSearchChange("")
+        keyboard?.hide()
+    }
+
+    val permissionsDesc = if (hasPermissionAttention) {
+        stringResource(R.string.conversation_permission_attention)
+    } else {
+        stringResource(R.string.route_permissions)
+    }
+    val settingsDesc = stringResource(R.string.route_settings)
+    val searchPlaceholder = stringResource(R.string.conversation_search_hint)
+    val cancelText = stringResource(R.string.action_cancel)
+    val clearDescription = stringResource(R.string.page_clear_84fcd7)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .then(backdropModifier)
-            .windowInsetsPadding(dockInsets)
-            .padding(
-                start = ConversationPanelMetrics.PaneHorizontalPadding,
-                end = ConversationPanelMetrics.PaneHorizontalPadding,
-                top = ConversationPanelMetrics.BottomDockVerticalPadding + 14.dp,
-                bottom = ConversationPanelMetrics.BottomDockVerticalPadding,
-            ),
+            .then(miuixOrFallbackBackdropModifier),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(ConversationPanelMetrics.BottomDockGap),
+        if (activeCouiBackdrop != null) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .couiBackdrop(couiDockBackdrop),
+            ) {
+                androidx.compose.foundation.layout.Spacer(
+                    Modifier
+                        .matchParentSize()
+                        .then(couiBlurModifier),
+                )
+                androidx.compose.foundation.layout.Spacer(
+                    Modifier
+                        .matchParentSize()
+                        .background(bottomScrimBrush),
+                )
+            }
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(dockInsets)
+                .padding(
+                    start = if (canUseCouiNativeSearchBar) 0.dp else ConversationPanelMetrics.PaneHorizontalPadding,
+                    end = if (canUseCouiNativeSearchBar) 0.dp else ConversationPanelMetrics.PaneHorizontalPadding,
+                    top = ConversationPanelMetrics.BottomDockVerticalPadding + 10.dp,
+                    bottom = ConversationPanelMetrics.BottomDockVerticalPadding,
+                ),
         ) {
-            PaneSearchCapsule(
-                query = query,
-                onSearchChange = onSearchChange,
-                couiBackdrop = couiBackdrop,
-                modifier = Modifier.weight(1f),
-            )
-            PaneDockCircleButton(
-                icon = ConversationPaneIcons.Permissions,
-                contentDescription = if (hasPermissionAttention) {
-                    stringResource(R.string.conversation_permission_attention)
-                } else {
-                    stringResource(R.string.route_permissions)
-                },
-                showBadge = hasPermissionAttention,
-                couiBackdrop = couiBackdrop,
-                onClick = onOpenPermissions,
-            )
-            PaneDockCircleButton(
-                icon = ConversationPaneIcons.Settings,
-                contentDescription = stringResource(R.string.route_settings),
-                showBadge = false,
-                couiBackdrop = couiBackdrop,
-                onClick = onOpenSettings,
-            )
+            if (canUseCouiNativeSearchBar) {
+                val buttonsProgress by animateFloatAsState(
+                    targetValue = if (searchExpanded) 0f else 1f,
+                    animationSpec = spring(dampingRatio = 0.86f, stiffness = 380f),
+                    label = "CouiDockButtonsProgress",
+                )
+                Layout(
+                    modifier = Modifier.fillMaxWidth(),
+                    content = {
+                        SearchBar(
+                            modifier = Modifier.fillMaxWidth(),
+                            state = searchState,
+                            query = query,
+                            onQueryChange = onSearchChange,
+                            onExpandedChange = { next ->
+                                searchExpanded = next
+                                if (!next) onSearchChange("")
+                            },
+                            placeholder = searchPlaceholder,
+                            cancelText = cancelText,
+                            clearDescription = clearDescription,
+                            dark = couiDark,
+                            backdrop = couiDockBackdrop,
+                            onSearch = { keyboard?.hide() },
+                        )
+                        Row(
+                            modifier = Modifier.graphicsLayer {
+                                val p = buttonsProgress.coerceIn(0f, 1f)
+                                alpha = p
+                                val s = 0.76f + 0.24f * p
+                                scaleX = s
+                                scaleY = s
+                            },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            PaneDockCircleButton(
+                                icon = ConversationPaneIcons.Permissions,
+                                contentDescription = permissionsDesc,
+                                showBadge = hasPermissionAttention,
+                                couiBackdrop = couiDockBackdrop,
+                                onClick = { if (!searchExpanded) onOpenPermissions() },
+                            )
+                            Spacer(Modifier.width(ConversationPanelMetrics.BottomDockGap))
+                            PaneDockCircleButton(
+                                icon = ConversationPaneIcons.Settings,
+                                contentDescription = settingsDesc,
+                                showBadge = false,
+                                couiBackdrop = couiDockBackdrop,
+                                onClick = { if (!searchExpanded) onOpenSettings() },
+                            )
+                        }
+                    },
+                ) { measurables, constraints ->
+                    val buttonsPlaceable = measurables[1].measure(
+                        constraints.copy(minWidth = 0, minHeight = 0),
+                    )
+                    val sideMarginPx = ConversationPanelMetrics.PaneHorizontalPadding.roundToPx()
+                    val gapPx = ConversationPanelMetrics.BottomDockGap.roundToPx()
+                    // SearchBar 内部自带 16.dp 右边距，收起态保留 8.dp 视觉间距即可，避免双倍留白。
+                    val reservedRightPx = ((buttonsPlaceable.width + sideMarginPx - (sideMarginPx - gapPx)) * buttonsProgress)
+                        .toInt()
+                        .coerceAtLeast(0)
+                    val searchWidth = (constraints.maxWidth - reservedRightPx).coerceAtLeast(1)
+                    val searchPlaceable = measurables[0].measure(
+                        Constraints.fixedWidth(searchWidth).copy(
+                            minHeight = 0,
+                            maxHeight = constraints.maxHeight,
+                        ),
+                    )
+                    val layoutHeight = maxOf(searchPlaceable.height, buttonsPlaceable.height)
+                    layout(constraints.maxWidth, layoutHeight) {
+                        searchPlaceable.placeRelative(
+                            x = 0,
+                            y = (layoutHeight - searchPlaceable.height) / 2,
+                        )
+                        if (buttonsProgress > 0.01f) {
+                            val slideOffset = ((1f - buttonsProgress) * (buttonsPlaceable.width + sideMarginPx) * 0.35f).toInt()
+                            buttonsPlaceable.placeRelative(
+                                x = constraints.maxWidth - sideMarginPx - buttonsPlaceable.width + slideOffset,
+                                y = (layoutHeight - buttonsPlaceable.height) / 2,
+                            )
+                        }
+                    }
+                }
+            } else {
+                val effectiveCouiBackdrop = if (activeCouiBackdrop != null) couiDockBackdrop else null
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(ConversationPanelMetrics.BottomDockGap),
+                ) {
+                    PaneSearchCapsule(
+                        query = query,
+                        onSearchChange = onSearchChange,
+                        couiBackdrop = effectiveCouiBackdrop,
+                        modifier = Modifier.weight(1f),
+                    )
+                    PaneDockCircleButton(
+                        icon = ConversationPaneIcons.Permissions,
+                        contentDescription = permissionsDesc,
+                        showBadge = hasPermissionAttention,
+                        couiBackdrop = effectiveCouiBackdrop,
+                        onClick = onOpenPermissions,
+                    )
+                    PaneDockCircleButton(
+                        icon = ConversationPaneIcons.Settings,
+                        contentDescription = settingsDesc,
+                        showBadge = false,
+                        couiBackdrop = effectiveCouiBackdrop,
+                        onClick = onOpenSettings,
+                    )
+                }
+            }
         }
     }
 }
@@ -757,7 +913,8 @@ private fun PaneDockCircleButton(
         miuixColors.surfaceContainer
     }
 
-    Box(modifier = Modifier.size(ConversationPanelMetrics.DockButtonSize)) {
+    val buttonSize = if (isCoui) 40.dp else ConversationPanelMetrics.DockButtonSize
+    Box(modifier = Modifier.size(buttonSize)) {
         if (isCoui) {
             CouiPaneFloatingSurface(
                 modifier = Modifier.fillMaxSize(),
@@ -816,7 +973,7 @@ private fun PaneDockCircleButton(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 7.dp, end = 7.dp)
+                    .padding(top = if (isCoui) 6.dp else 7.dp, end = if (isCoui) 6.dp else 7.dp)
                     .size(9.dp)
                     .clip(CircleShape)
                     .background(badgeBorderColor)
@@ -940,7 +1097,7 @@ private fun CouiApi34FloatingSurface(
     val density = LocalDensity.current.density
     val contour = LocalCouiContourGlowEnabled.current
     val material = remember(dark, capsule) {
-        CouiTopAppBarButtonDefaults.material(dark = dark, capsule = capsule, search = capsule)
+        CouiTopAppBarButtonDefaults.systemMaterial(dark = dark, capsule = capsule)
     }
     val shadow = remember(dark, capsule, density, contour) {
         CouiTopAppBarButtonDefaults.shadow(
@@ -948,7 +1105,8 @@ private fun CouiApi34FloatingSurface(
             capsule = capsule,
             density = density,
             contour = contour,
-            search = capsule,
+            search = false,
+            alphaScale = 1f,
         )
     }
     var boundsSize by remember { mutableStateOf(IntSize.Zero) }

@@ -381,7 +381,7 @@ private fun CouiTopBarOverflowMenu(
 
     Box {
         CouiTopAppBarIconButton(
-            icon = CouiIcons.More,
+            icon = CouiIcons.Outlined.More,
             contentDescription = stringResource(R.string.action_more),
             modifier = Modifier.couiMenuAnchor(anchor),
             dark = dark,
