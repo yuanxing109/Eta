@@ -721,32 +721,23 @@ private fun ConversationHistoryRow(
 
             Column(modifier = Modifier.weight(1f)) {
                 val title = conversation.title.ifBlank { conversation.preview }
-                Text(
+                ConversationSpaceRowTitle(
                     text = title,
                     color = titleColor,
-                    style = MiuixTheme.textStyles.body1.copy(fontSize = 15.sp),
-                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    emphasized = selected,
                 )
                 // 标题与角色名相同（如未改名的角色会话）时不再重复第二行。
                 conversation.characterName?.takeIf { it != title }?.let { name ->
-                    Text(
+                    ConversationSpaceRowCaption(
                         text = name,
-                        style = MiuixTheme.textStyles.footnote1.copy(fontSize = 12.sp),
                         color = summaryColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 2.dp),
                     )
                 }
                 conversation.runStatus?.let { status ->
-                    Text(
+                    ConversationSpaceRowCaption(
                         text = status,
-                        style = MiuixTheme.textStyles.footnote1.copy(fontSize = 12.sp),
                         color = accentColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 2.dp),
                     )
                 }
@@ -886,6 +877,18 @@ private fun ConversationHistoryRow(
                             },
                         )
                     }
+                    val moveItem = remember(moveSpaceText) {
+                        DropdownItem(
+                            text = moveSpaceText,
+                            icon = { modifier ->
+                                Icon(
+                                    imageVector = Icons.Outlined.Folder,
+                                    contentDescription = null,
+                                    modifier = modifier.size(ConversationPanelMetrics.ActionIconSize),
+                                )
+                            },
+                        )
+                    }
                     val exportItem = remember(exportText) {
                         DropdownItem(
                             text = exportText,
@@ -938,13 +941,23 @@ private fun ConversationHistoryRow(
                             },
                         )
                         DropdownImpl(
-                            item = exportItem,
+                            item = moveItem,
                             optionSize = 5,
                             isSelected = false,
                             index = 2,
                             onSelectedIndexChange = {
                                 showActionMenu = false
                                 onMoveToSpace()
+                            },
+                        )
+                        DropdownImpl(
+                            item = exportItem,
+                            optionSize = 5,
+                            isSelected = false,
+                            index = 3,
+                            onSelectedIndexChange = {
+                                showActionMenu = false
+                                onExport()
                             },
                         )
                         DropdownImpl(
@@ -1145,11 +1158,18 @@ private fun ConversationSpaceHeader(
 ) {
     var showSpaceMenu by remember { mutableStateOf(false) }
     val spaceMenuAnchor = rememberCouiMenuAnchor()
+    val spaceTokens = rememberConversationSpaceTokens()
+    val headerInteraction = remember { MutableInteractionSource() }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .clickable(onClick = onToggle)
+            .clip(RoundedCornerShape(spaceTokens.headerCornerRadius))
+            .then(
+                conversationSpaceClickable(
+                    interactionSource = headerInteraction,
+                    onClick = onToggle,
+                ),
+            )
             .padding(
                 start = LocalPaneMetrics.RowHorizontalPadding,
                 end = LocalPaneMetrics.RowHorizontalPadding,
@@ -1162,23 +1182,17 @@ private fun ConversationSpaceHeader(
             ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
+        ConversationSpaceGlyph(
             imageVector = if (header.expanded) Icons.Filled.FolderOpen else Icons.Outlined.Folder,
             contentDescription = null,
-            tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            modifier = Modifier.size(16.dp),
+            modifier = Modifier.size(ConversationSpaceMetrics.HeaderIconSize),
         )
-        Spacer(Modifier.width(6.dp))
-        Text(
+        Spacer(Modifier.width(ConversationSpaceMetrics.HeaderIconGap))
+        ConversationSpaceLabel(
             text = header.space.title,
-            style = MiuixTheme.textStyles.footnote1,
-            fontWeight = FontWeight.SemiBold,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        HeaderIconButton(
+        ConversationSpaceAction(
             icon = Icons.Outlined.MoreVert,
             contentDescription = stringResource(R.string.project_manage_title),
             onClick = { spaceMenuAnchor.open { showSpaceMenu = true } },
@@ -1202,33 +1216,10 @@ private fun ConversationSpaceHeader(
                 onDelete()
             },
         )
-        HeaderIconButton(
+        ConversationSpaceAction(
             icon = ChatActionIcons.NewChat,
             contentDescription = stringResource(R.string.project_new_conversation),
             onClick = onNewConversation,
-        )
-    }
-}
-
-@Composable
-private fun HeaderIconButton(
-    icon: ImageVector,
-    contentDescription: String?,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .size(28.dp)
-            .clip(CircleShape)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            modifier = Modifier.size(16.dp),
         )
     }
 }
@@ -1346,4 +1337,4 @@ private object LocalPaneMetrics {
     val DockEntryIconSize = 20.dp
 }
 
-private val ConversationNestedRowIndent = 22.dp
+private val ConversationNestedRowIndent = ConversationSpaceMetrics.NestedRowIndent

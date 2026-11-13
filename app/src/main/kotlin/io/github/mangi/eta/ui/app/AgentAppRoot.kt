@@ -9,15 +9,17 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -62,7 +64,12 @@ import io.github.mangi.eta.data.repository.RuntimeConfigRepository
 import io.github.mangi.eta.ui.AppearanceSettingsScreen
 import io.github.mangi.eta.ui.IncomingShareRequest
 import io.github.mangi.eta.ui.SettingsScreen
+import io.github.mangi.eta.ui.components.ConversationSpaceGlyph
+import io.github.mangi.eta.ui.components.ConversationSpaceLabel
+import io.github.mangi.eta.ui.components.ConversationSpaceMetrics
 import io.github.mangi.eta.ui.components.MiuixDialogActions
+import io.github.mangi.eta.ui.components.conversationSpaceClickable
+import io.github.mangi.eta.ui.components.rememberConversationSpaceTokens
 import io.github.mangi.eta.ui.components.coui.CouiConfirmDialog
 import io.github.mangi.eta.ui.components.coui.CouiInputDialog
 import io.github.mangi.eta.ui.components.coui.CouiNoticeDialog
@@ -1347,7 +1354,7 @@ private fun ConversationSpacePicker(
     onPick: (String?) -> Unit,
     onCreateNew: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(ConversationSpaceMetrics.PickerRowGap)) {
         ConversationSpacePickerRow(
             title = stringResource(R.string.conversation_move_space_default),
             selected = selectedSpaceKey == null,
@@ -1374,27 +1381,31 @@ private fun ConversationSpacePickerRow(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val tokens = rememberConversationSpaceTokens()
+    val interaction = remember { MutableInteractionSource() }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+            .clip(RoundedCornerShape(tokens.headerCornerRadius))
+            .then(conversationSpaceClickable(interactionSource = interaction, onClick = onClick))
+            .heightIn(min = ConversationSpaceMetrics.PickerRowMinHeight)
+            .padding(
+                horizontal = ConversationSpaceMetrics.PickerRowHorizontalPadding,
+                vertical = 10.dp,
+            ),
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
     ) {
-        Text(
+        ConversationSpaceLabel(
             text = title,
             modifier = Modifier.weight(1f),
-            maxLines = 1,
-            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
         )
         if (selected) {
-            Spacer(Modifier.width(8.dp))
-            Icon(
+            Spacer(Modifier.width(ConversationSpaceMetrics.HeaderIconGap))
+            ConversationSpaceGlyph(
                 imageVector = Icons.Filled.Check,
                 contentDescription = null,
-                tint = MiuixTheme.colorScheme.primary,
-                modifier = Modifier.width(18.dp),
+                tint = tokens.checkedTint,
+                modifier = Modifier.size(ConversationSpaceMetrics.PickerCheckSize),
             )
         }
     }
