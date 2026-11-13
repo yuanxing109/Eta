@@ -1197,7 +1197,11 @@ internal class AgentAppState(
      * 不为侧栏把整段 history_json 拖进来。
      */
     private suspend fun loadProjectSpaces() {
-        val spaces = runCatching { ProjectSpaceRepository.reload() }.getOrElse { emptyList() }
+        val identity = if (TerminalRuntime.rootAvailable) "root" else "user"
+        val spaces = runCatching {
+            ProjectSpaceRepository.ensureDefault(identity)
+            ProjectSpaceRepository.reload()
+        }.getOrElse { emptyList() }
         val bindings = runCatching {
             EtaDatabase.get(appContext).conversationDao().conversationSpaceRows()
         }.getOrElse { emptyList() }

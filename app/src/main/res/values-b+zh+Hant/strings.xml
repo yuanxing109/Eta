@@ -297,7 +297,6 @@
   <string name="project_manage_title">工作區操作</string>
   <string name="project_create">新增專案</string>
   <string name="workspace_section_title">工作區</string>
-  <string name="workspace_search">搜尋會話</string>
   <string name="project_new_conversation">新增會話</string>
   <string name="project_open_in_terminal">在終端開啟</string>
   <string name="project_rename">重新命名工作區</string>

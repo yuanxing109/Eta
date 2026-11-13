@@ -35,7 +35,6 @@ import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Settings
@@ -50,8 +49,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
@@ -173,7 +170,6 @@ internal fun ConversationPanePanel(
     // 默认工作区反过来：默认展开，点一下收起，所以单独记「被收起的键」。
     var collapsedSpaceKeys by remember { mutableStateOf(setOf<String>()) }
     // 顶部搜索图标要把焦点交给下面那条搜索框。
-    val searchFocusRequester = remember { FocusRequester() }
     val entries = remember(state.conversations, state.spaces, expandedSpaceKeys, collapsedSpaceKeys, query) {
         buildDrawerEntries(
             conversations = state.conversations,
@@ -202,15 +198,11 @@ internal fun ConversationPanePanel(
                         .padding(horizontal = ConversationPanelMetrics.PaneHorizontalPadding),
                 ) {
                     Spacer(Modifier.height(ConversationPanelMetrics.TopInset))
-                    WorkspaceSectionHeader(
-                        onSearch = { searchFocusRequester.requestFocus() },
-                        onCreateProject = onCreateProject,
-                    )
+                    WorkspaceSectionHeader(onCreateProject = onCreateProject)
                     Spacer(Modifier.height(ConversationPanelMetrics.AfterActionBar))
                     PaneActionBar(
                         query = state.searchQuery,
                         onSearchChange = onSearchChange,
-                        focusRequester = searchFocusRequester,
                     )
                     Spacer(Modifier.height(ConversationPanelMetrics.AfterActionBar))
                 }
@@ -328,7 +320,6 @@ private fun PaneFixedRegion(content: @Composable () -> Unit) {
 private fun PaneActionBar(
     query: String,
     onSearchChange: (String) -> Unit,
-    focusRequester: FocusRequester? = null,
 ) {
     when (LocalUiStyle.current) {
         AppearanceUiStyle.COUI -> {
@@ -337,11 +328,6 @@ private fun PaneActionBar(
                 onQueryChange = onSearchChange,
                 placeholder = stringResource(R.string.conversation_search_hint),
                 backgroundColor = conversationPaneContainerColor(),
-                modifier = if (focusRequester != null) {
-                    Modifier.focusRequester(focusRequester)
-                } else {
-                    Modifier
-                },
             )
         }
         AppearanceUiStyle.MIUIX -> {
@@ -351,14 +337,7 @@ private fun PaneActionBar(
             ) {
                 SearchBar(
                     modifier = Modifier
-                        .weight(1f)
-                        .then(
-                            if (focusRequester != null) {
-                                Modifier.focusRequester(focusRequester)
-                            } else {
-                                Modifier
-                            },
-                        ),
+                        .weight(1f),
                     insideMargin = DpSize.Zero,
                     expanded = false,
                     onExpandedChange = {},
@@ -880,7 +859,7 @@ private fun buildDrawerEntries(
     query: String = "",
 ): List<ConversationDrawerEntry> {
     // 没有会话也没有用户项目时交给空态提示；否则至少给底部「新建工作区」留位置。
-    if (conversations.isEmpty() && spaces.none { !it.isDefault }) return emptyList()
+    if (conversations.isEmpty() && spaces.isEmpty()) return emptyList()
     val normalizedQuery = query.trim()
     val searchActive = normalizedQuery.isNotEmpty()
     fun ConversationSummaryUi.matchesSearch(): Boolean =
@@ -897,7 +876,13 @@ private fun buildDrawerEntries(
     }
 
     // 未归属（space_key = null）的会话都归默认工作区，它恒定排在最前。
-    if (defaultSpace != null) {
+    if (defaultSpace == null) {
+        // 兜底：库里内置工作区缺失（老版本或被清库）时，至少把会话按平铺列表显示出来，
+        // 不让侧栏出现「有会话却提示还没有对话」。
+        conversations
+            .filter { !searchActive || it.matchesSearch() }
+            .forEach { entries += ConversationDrawerEntry.Conversation(it) }
+    } else {
         val items = conversations
             .filter { it.spaceKey == null || it.spaceKey in defaultKeys }
             .filter { !searchActive || it.matchesSearch() }
@@ -950,7 +935,6 @@ private fun HeaderIconButton(
 /** 顶部条：工作区标题 + 搜索 / 新建工作区入口。 */
 @Composable
 private fun WorkspaceSectionHeader(
-    onSearch: () -> Unit,
     onCreateProject: () -> Unit,
 ) {
     Row(
@@ -964,11 +948,6 @@ private fun WorkspaceSectionHeader(
             style = MiuixTheme.textStyles.title2,
             color = MiuixTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
-        )
-        HeaderIconButton(
-            icon = Icons.Outlined.Search,
-            contentDescription = stringResource(R.string.workspace_search),
-            onClick = onSearch,
         )
         HeaderIconButton(
             icon = Icons.Outlined.Add,

@@ -247,7 +247,6 @@
   <string name="project_manage_title">Workspace actions</string>
   <string name="project_create">New project</string>
   <string name="workspace_section_title">Workspaces</string>
-  <string name="workspace_search">Search conversations</string>
   <string name="project_new_conversation">New chat</string>
   <string name="project_open_in_terminal">Open in terminal</string>
   <string name="project_rename">Rename workspace</string>

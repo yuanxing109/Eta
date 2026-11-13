@@ -73,8 +73,16 @@ internal abstract class EtaDatabase : RoomDatabase() {
                         MIGRATION_25_26,
                     )
                     .addCallback(object : Callback() {
-                        override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) { createTextChunkCleanup(db) }
-                        override fun onOpen(db: androidx.sqlite.db.SupportSQLiteDatabase) { createTextChunkCleanup(db) }
+                        override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                            createTextChunkCleanup(db)
+                            insertDefaultProjectSpace(db)
+                        }
+
+                        override fun onOpen(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                            createTextChunkCleanup(db)
+                            // 老版本建库时没有内置工作区（或曾经被破坏性迁移清空），每次打开补种一次。
+                            insertDefaultProjectSpace(db)
+                        }
                     })
                     .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()
@@ -317,6 +325,27 @@ internal abstract class EtaDatabase : RoomDatabase() {
                 "CREATE UNIQUE INDEX IF NOT EXISTS " +
                     "index_runtime_inflight_events_run_id_sort_index " +
                     "ON runtime_inflight_events(run_id, sort_index)"
+            )
+        }
+
+        /** 内置默认工作区：新库、旧库打开时都要保证存在，否则侧栏一个工作区都没有。 */
+        internal fun insertDefaultProjectSpace(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+            val now = System.currentTimeMillis()
+            db.execSQL(
+                "INSERT OR IGNORE INTO project_spaces " +
+                    "(id, space_key, kind, host_path, linux_path, title, deletable, last_used_at, created_at) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                arrayOf<Any?>(
+                    ProjectSpaceEntity.DEFAULT_SPACE_ID,
+                    ProjectSpaceEntity.DEFAULT_SPACE_KEY,
+                    ProjectSpaceKind.BUILTIN.name,
+                    ProjectSpaceEntity.DEFAULT_HOST_PATH,
+                    ProjectSpaceEntity.DEFAULT_LINUX_PATH,
+                    ProjectSpaceEntity.DEFAULT_TITLE,
+                    0,
+                    now,
+                    now,
+                ),
             )
         }
 
