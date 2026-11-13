@@ -280,10 +280,10 @@ internal fun ConversationPanePanel(
                         }
                     }
                 }
-            }
-            // 「新建工作区」不依赖任何会话，空列表时也要给入口。
-            item(key = "new-project") {
-                NewProjectRow(onClick = onCreateProject)
+                // 「新建工作区」不依赖任何会话，空列表时也要给入口。
+                item(key = "new-project") {
+                    NewProjectRow(onClick = onCreateProject)
+                }
             }
             PaneFixedRegion {
                 Column(
@@ -1034,8 +1034,9 @@ private fun ProjectSpaceMenu(
             val optionSize = if (canManage) 4 else 2
             WindowListPopup(
                 show = expanded,
+                popupPositionProvider = ListPopupDefaults.ContextMenuPositionProvider,
+                alignment = PopupPositionProvider.Align.BottomEnd,
                 onDismissRequest = onDismissRequest,
-                anchor = anchor,
             ) {
                 ListPopupColumn {
                     DropdownImpl(
