@@ -574,7 +574,11 @@ class ConversationPanePanelTest {
 
         fun texts(): List<String> = collectAllTexts(activity)
 
-        fun click(label: String) = clickByLabel(activity, label)
+        fun click(label: String) {
+            clickByLabel(activity, label)
+            // 点击会改 mutableState，需要推进一帧让 Recomposer 重跑并完成布局，语义树才会更新。
+            pumpFrames(activity, frameClock)
+        }
 
         fun close() {
             recomposer.cancel()
