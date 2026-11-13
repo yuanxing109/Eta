@@ -32,6 +32,7 @@ import io.github.mangi.eta.data.model.AppearanceUiStyle
 import io.github.mangi.eta.ui.app.AgentAppTheme
 import io.github.mangi.eta.ui.model.ConversationModeUi
 import io.github.mangi.eta.ui.model.ConversationPaneUiState
+import io.github.mangi.eta.ui.model.ConversationSpaceUi
 import io.github.mangi.eta.ui.model.ConversationSummaryUi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,7 +43,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -53,7 +53,6 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
 import org.robolectric.shadows.ShadowLooper
 
-@Ignore("上游 v3.4.3 侧栏重构的行为测试；本地侧栏以工作区分组方案取代该实现，待按本地语义重写后再启用")
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [36])
 @LooperMode(LooperMode.Mode.PAUSED)
@@ -359,6 +358,233 @@ class ConversationPanePanelTest {
         }
     }
 
+    @Test
+    fun spaceHeadersRenderGroupsAndCollapseProjectSpacesByDefault() {
+        val fixture = SpacePaneFixture()
+        try {
+            fixture.show()
+            val texts = fixture.texts()
+            assertTrue("Default space header should be shown: $texts", texts.contains("默认工作区"))
+            assertTrue("Project space header should be shown: $texts", texts.contains("项目 Alpha"))
+            assertTrue("Default space conversation should be listed: $texts", texts.contains("默认会话"))
+            assertTrue(
+                "Collapsed project space should hide its conversations: $texts",
+                texts.none { it == "Alpha 会话" },
+            )
+
+            fixture.click("项目 Alpha")
+            val expandedTexts = fixture.texts()
+            assertTrue(
+                "Expanded project space should list its conversations: $expandedTexts",
+                expandedTexts.contains("Alpha 会话"),
+            )
+
+            fixture.click("项目 Alpha")
+            val collapsedTexts = fixture.texts()
+            assertTrue(
+                "Collapsing the project space should hide its conversations again: $collapsedTexts",
+                collapsedTexts.none { it == "Alpha 会话" },
+            )
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test
+    fun spaceHeaderNewConversationTargetsThatSpace() {
+        val fixture = SpacePaneFixture()
+        try {
+            fixture.show()
+            fixture.click(fixture.activity.getString(R.string.project_new_conversation))
+            assertEquals("space-default", fixture.calls.newChatInSpace)
+            assertEquals(0, fixture.calls.newChat)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test
+    fun searchingSpaceTitleKeepsGroupVisibleAndForcedExpanded() {
+        val fixture = SpacePaneFixture(
+            searchQuery = "alpha",
+            conversations = listOf(spaceConversation("conv-alpha", "Alpha 会话", "project-alpha")),
+        )
+        try {
+            fixture.show()
+            val texts = fixture.texts()
+            assertTrue("Space title hit should keep the header: $texts", texts.contains("项目 Alpha"))
+            assertTrue(
+                "Space title hit should force the group expanded: $texts",
+                texts.contains("Alpha 会话"),
+            )
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test
+    fun searchingWithoutAnyHitShowsEmptyState() {
+        val fixture = SpacePaneFixture(
+            searchQuery = "zzz-not-found",
+            conversations = emptyList(),
+        )
+        try {
+            fixture.show()
+            val texts = fixture.texts()
+            assertTrue(
+                "Empty search result state should be shown: $texts",
+                texts.contains(fixture.activity.getString(R.string.conversation_no_results)),
+            )
+            assertTrue("No space header should survive a miss: $texts", texts.none { it == "项目 Alpha" })
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test
+    fun emptyProjectSpaceStillRendersHeaderPlaceholder() {
+        val fixture = SpacePaneFixture(
+            conversations = listOf(spaceConversation("conv-default", "默认会话", null)),
+            spaces = listOf(
+                ConversationSpaceUi(spaceKey = "space-default", title = "默认工作区", isDefault = true),
+                ConversationSpaceUi(spaceKey = "project-empty", title = "空项目"),
+            ),
+        )
+        try {
+            fixture.show()
+            val texts = fixture.texts()
+            assertTrue("Empty project space header should be shown: $texts", texts.contains("空项目"))
+            assertTrue(
+                "Placeholder header must keep the pane out of the global empty state: $texts",
+                texts.none { it == fixture.activity.getString(R.string.conversation_empty) },
+            )
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test
+    fun spaceMenuActionsRespectManageableSpaceAndDispatchCallbacks() {
+        assertEquals(
+            listOf(ConversationSpaceMenuAction.OpenInTerminal, ConversationSpaceMenuAction.CreateProject),
+            conversationSpaceMenuActions(canManage = false),
+        )
+        assertEquals(
+            listOf(
+                ConversationSpaceMenuAction.OpenInTerminal,
+                ConversationSpaceMenuAction.CreateProject,
+                ConversationSpaceMenuAction.Rename,
+                ConversationSpaceMenuAction.Delete,
+            ),
+            conversationSpaceMenuActions(canManage = true),
+        )
+
+        var opened = 0
+        var created = 0
+        var renamed = 0
+        var deleted = 0
+        for (action in conversationSpaceMenuActions(canManage = true)) {
+            dispatchConversationSpaceMenuAction(
+                action = action,
+                onOpenInTerminal = { opened++ },
+                onCreateProject = { created++ },
+                onRename = { renamed++ },
+                onDelete = { deleted++ },
+            )
+        }
+        assertEquals(1, opened)
+        assertEquals(1, created)
+        assertEquals(1, renamed)
+        assertEquals(1, deleted)
+    }
+
+    private class SpacePaneCalls {
+        var newChat = 0
+        var newChatInSpace: String? = null
+        var openedInTerminal: String? = null
+        var renamed: String? = null
+        var deleted: String? = null
+        var createdProject = 0
+    }
+
+    private inner class SpacePaneFixture(
+        searchQuery: String = "",
+        conversations: List<ConversationSummaryUi> = listOf(
+            spaceConversation("conv-default", "默认会话", null),
+            spaceConversation("conv-alpha", "Alpha 会话", "project-alpha"),
+        ),
+        spaces: List<ConversationSpaceUi> = listOf(
+            ConversationSpaceUi(spaceKey = "space-default", title = "默认工作区", isDefault = true),
+            ConversationSpaceUi(spaceKey = "project-alpha", title = "项目 Alpha"),
+        ),
+    ) {
+        val controller = Robolectric.buildActivity(ComponentActivity::class.java).setup().visible()
+        val activity: ComponentActivity = controller.get()
+        val frameClock = BroadcastFrameClock()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + frameClock)
+        val recomposer = Recomposer(scope.coroutineContext)
+        val calls = SpacePaneCalls()
+        val state = mutableStateOf(
+            ConversationPaneUiState(
+                conversations = conversations,
+                selectedConversationId = null,
+                searchQuery = searchQuery,
+                spaces = spaces,
+            ),
+        )
+        var uiStyle by mutableStateOf(AppearanceUiStyle.COUI)
+
+        fun show() {
+            mountWithDeterministicRecomposer(activity, scope, recomposer) {
+                AgentAppTheme(
+                    appearance = AppearanceSettings(uiStyle, AppearanceThemeMode.LIGHT),
+                    applyInterfaceScale = true,
+                ) {
+                    ConversationSidePaneScaffold(
+                        state = state.value,
+                        visible = true,
+                        backHandlerEnabled = true,
+                        onOpen = {},
+                        onDismiss = {},
+                        onSearchChange = { state.value = state.value.copy(searchQuery = it) },
+                        onNewConversation = { calls.newChat++ },
+                        onConversationSelected = {},
+                        onConversationTogglePin = {},
+                        onConversationRename = {},
+                        onConversationExport = {},
+                        onConversationDelete = {},
+                        onNewConversationInSpace = { calls.newChatInSpace = it.spaceKey },
+                        onOpenProjectInTerminal = { calls.openedInTerminal = it.spaceKey },
+                        onRenameProjectSpace = { calls.renamed = it.spaceKey },
+                        onDeleteProjectSpace = { calls.deleted = it.spaceKey },
+                        onCreateProject = { calls.createdProject++ },
+                        onOpenSettings = {},
+                        onOpenModelProviders = {},
+                        onOpenTools = {},
+                        onOpenSkills = {},
+                        onOpenCharacters = {},
+                        onOpenPermissions = {},
+                    ) {
+                        Box(Modifier.fillMaxSize())
+                    }
+                }
+            }
+            pumpFrames(activity, frameClock)
+        }
+
+        fun texts(): List<String> = collectAllTexts(activity)
+
+        fun click(label: String) = clickByLabel(activity, label)
+
+        fun close() {
+            recomposer.cancel()
+            scope.cancel()
+            ShadowLooper.idleMainLooper(100, TimeUnit.MILLISECONDS)
+            controller.pause().stop().destroy()
+            ShadowLooper.idleMainLooper(100, TimeUnit.MILLISECONDS)
+        }
+    }
+
     private fun mountWithDeterministicRecomposer(
         activity: ComponentActivity,
         scope: CoroutineScope,
@@ -451,3 +677,13 @@ class ConversationPanePanelTest {
         return result
     }
 }
+
+private fun spaceConversation(id: String, title: String, spaceKey: String?) = ConversationSummaryUi(
+    id = id,
+    title = title,
+    preview = "",
+    timeLabel = "今天",
+    updatedAtMillis = System.currentTimeMillis(),
+    mode = ConversationModeUi.Chat,
+    spaceKey = spaceKey,
+)

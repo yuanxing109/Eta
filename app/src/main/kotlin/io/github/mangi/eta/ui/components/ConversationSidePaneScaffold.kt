@@ -74,7 +74,7 @@ fun ConversationSidePaneScaffold(
     onOpen: () -> Unit,
     onDismiss: () -> Unit,
     onSearchChange: (String) -> Unit,
-    onNewConversation: () -> Unit = {},
+    onNewConversation: () -> Unit,
     onConversationSelected: (String) -> Unit,
     onConversationTogglePin: (ConversationSummaryUi) -> Unit,
     onConversationRename: (ConversationSummaryUi) -> Unit,
