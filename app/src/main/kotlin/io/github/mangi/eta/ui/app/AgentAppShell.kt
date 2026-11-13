@@ -145,6 +145,7 @@ internal fun AgentAppShell(
     homeCharacter: RoleplayChatUi? = null,
     homeModelPickerState: AgentModelPickerUiState? = null,
     isHomeStreaming: Boolean = false,
+    hasPermissionAttention: Boolean = false,
     onHomeModelSelected: (String) -> Unit = {},
     onOpenCharacter: () -> Unit = {},
     content: @Composable (PaddingValues) -> Unit,
@@ -300,6 +301,7 @@ internal fun AgentAppShell(
                 onOpen = onOpenConversationPane,
                 onDismiss = onDismissConversationPane,
                 onSearchChange = onSearchConversations,
+                onNewConversation = onNewConversation,
                 onConversationSelected = onSelectConversation,
                 onConversationTogglePin = onConversationTogglePin,
                 onConversationRename = onConversationRename,
@@ -318,6 +320,8 @@ internal fun AgentAppShell(
                 onOpenSkills = onOpenSkills,
                 onOpenCharacters = onOpenCharacters,
                 onOpenPermissions = onOpenPermissions,
+                activeModelLabel = homeModelPickerState?.selectedModel?.displayName,
+                hasPermissionAttention = hasPermissionAttention,
             ) {
                 pageContent()
             }
@@ -692,6 +696,8 @@ private fun titleForRoute(route: AppRoute?): String = when (route) {
     is AppRoute.WebToolsSettings -> stringResource(R.string.web_tools_settings_title)
     is AppRoute.Skills -> stringResource(R.string.route_skills)
     is AppRoute.Subagents -> "Subagent"
+    is AppRoute.ConversationTitleSettings -> stringResource(R.string.conversation_title_settings_title)
+    is AppRoute.AssistantOverlaySettings -> stringResource(R.string.assistant_overlay_settings_title)
     is AppRoute.Characters -> "角色"
     is AppRoute.CharacterDetail -> "角色详情"
     is AppRoute.CharacterEditor -> "编辑角色"

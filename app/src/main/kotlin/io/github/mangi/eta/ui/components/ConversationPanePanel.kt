@@ -96,7 +96,7 @@ import top.yukonga.miuix.kmp.window.WindowListPopup
  * 外层水平边距（12.dp）+ 行内水平边距（16.dp）= 28.dp，与 Miuix 原生 [SmallTitle] 的默认内边距
  * 及 [InputField] 内部搜索图标起点完全对齐，保证搜索框、分组标题与对话标题处于同一条垂直基准线。
  */
-private object ConversationPanelMetrics {
+private object LocalPaneMetrics {
     val PaneHorizontalPadding = 12.dp
     val TopInset = 8.dp
     val AfterActionBar = 8.dp
@@ -118,27 +118,20 @@ private object ConversationPanelMetrics {
     val DockEntryIconSize = 20.dp
 }
 
-/**
- * 侧栏与外层推移容器共用的背景色。
- *
- * 深色下聊天区保持 surface（纯黑/近黑），侧栏沿用同一颜色会在展开后与聊天区融为一体；
- * 抬高一档到 surfaceContainer，保证两侧始终可分。浅色维持 surface，避免改变现有观感。
- */
-@Composable
-internal fun conversationPaneContainerColor(): Color {
-    if (LocalUiStyle.current == AppearanceUiStyle.COUI) {
-        return if (CouiTheme.isDark) Color(0xFF18191C) else Color(0xFFF3F4F6)
-    }
-    val colors = MiuixTheme.colorScheme
-    return if (colors.background.luminance() > 0.5f) colors.surface else colors.surfaceContainer
-}
+
 
 @Composable
 internal fun ConversationPanePanel(
     state: ConversationPaneUiState,
     width: androidx.compose.ui.unit.Dp,
     listState: androidx.compose.foundation.lazy.LazyListState,
+    /** 上游 3.4.3 侧栏重构引入的可见性/模型/权限提示参数；本地方案以工作区分组为主，暂未消费。 */
+    isRevealed: Boolean = false,
+    activeModelLabel: String? = null,
+    hasPermissionAttention: Boolean = false,
     onSearchChange: (String) -> Unit,
+    /** 上游 3.4.3 的全局新建入口；本地按工作区新建（onNewConversationInSpace），此处保留以兼容调用方。 */
+    onNewConversation: () -> Unit = {},
     onConversationSelected: (String) -> Unit,
     onConversationTogglePin: (ConversationSummaryUi) -> Unit,
     onConversationRename: (ConversationSummaryUi) -> Unit,
@@ -192,16 +185,16 @@ internal fun ConversationPanePanel(
                         .windowInsetsPadding(
                             WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
                         )
-                        .padding(horizontal = ConversationPanelMetrics.PaneHorizontalPadding),
+                        .padding(horizontal = LocalPaneMetrics.PaneHorizontalPadding),
                 ) {
-                    Spacer(Modifier.height(ConversationPanelMetrics.TopInset))
+                    Spacer(Modifier.height(LocalPaneMetrics.TopInset))
                     WorkspaceSectionHeader(onCreateProject = onCreateProject)
-                    Spacer(Modifier.height(ConversationPanelMetrics.AfterActionBar))
+                    Spacer(Modifier.height(LocalPaneMetrics.AfterActionBar))
                     PaneActionBar(
                         query = state.searchQuery,
                         onSearchChange = onSearchChange,
                     )
-                    Spacer(Modifier.height(ConversationPanelMetrics.AfterActionBar))
+                    Spacer(Modifier.height(LocalPaneMetrics.AfterActionBar))
                 }
             }
             LazyColumn(
@@ -213,11 +206,11 @@ internal fun ConversationPanePanel(
                     .windowInsetsPadding(
                         WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
                     )
-                    .padding(horizontal = ConversationPanelMetrics.PaneHorizontalPadding)
+                    .padding(horizontal = LocalPaneMetrics.PaneHorizontalPadding)
                     .scrollEndHaptic()
                     .overScrollVertical(),
                 contentPadding = PaddingValues(bottom = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(ConversationPanelMetrics.RowGap),
+                verticalArrangement = Arrangement.spacedBy(LocalPaneMetrics.RowGap),
                 overscrollEffect = null,
             ) {
                 if (entries.isEmpty()) {
@@ -277,13 +270,13 @@ internal fun ConversationPanePanel(
                         .windowInsetsPadding(
                             WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal),
                         )
-                        .padding(horizontal = ConversationPanelMetrics.PaneHorizontalPadding),
+                        .padding(horizontal = LocalPaneMetrics.PaneHorizontalPadding),
                 ) {
                     HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = ConversationPanelMetrics.RowHorizontalPadding),
+                        modifier = Modifier.padding(horizontal = LocalPaneMetrics.RowHorizontalPadding),
                         thickness = 0.5.dp,
                     )
-                    Spacer(Modifier.height(ConversationPanelMetrics.DockVerticalPadding))
+                    Spacer(Modifier.height(LocalPaneMetrics.DockVerticalPadding))
                     PaneDock(
                         onOpenSettings = onOpenSettings,
                         onOpenModelProviders = onOpenModelProviders,
@@ -292,7 +285,7 @@ internal fun ConversationPanePanel(
                         onOpenCharacters = onOpenCharacters,
                         onOpenPermissions = onOpenPermissions,
                     )
-                    Spacer(Modifier.height(ConversationPanelMetrics.BottomInset))
+                    Spacer(Modifier.height(LocalPaneMetrics.BottomInset))
                 }
             }
         }
@@ -372,14 +365,14 @@ private fun ConversationSpaceHeader(
             .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onToggle)
             .padding(
-                start = ConversationPanelMetrics.RowHorizontalPadding,
-                end = ConversationPanelMetrics.RowHorizontalPadding,
+                start = LocalPaneMetrics.RowHorizontalPadding,
+                end = LocalPaneMetrics.RowHorizontalPadding,
                 top = if (isFirstSection) {
-                    ConversationPanelMetrics.FirstSectionTopPadding
+                    LocalPaneMetrics.FirstSectionTopPadding
                 } else {
-                    ConversationPanelMetrics.SectionTopPadding
+                    LocalPaneMetrics.SectionTopPadding
                 },
-                bottom = ConversationPanelMetrics.SectionBottomPadding,
+                bottom = LocalPaneMetrics.SectionBottomPadding,
             ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -459,7 +452,7 @@ private fun ConversationTextRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = startPadding)
-                .heightIn(min = ConversationPanelMetrics.RowMinHeight)
+                .heightIn(min = LocalPaneMetrics.RowMinHeight)
                 .couiMenuAnchor(anchor)
                 .then(
                     if (isCoui) {
@@ -480,14 +473,14 @@ private fun ConversationTextRow(
                             } else {
                                 Color.Transparent
                             },
-                            cornerRadius = ConversationPanelMetrics.RowCornerRadius,
+                            cornerRadius = LocalPaneMetrics.RowCornerRadius,
                         )
                     },
                 )
                 .clickable(onClick = onClick)
                 .padding(
-                    horizontal = ConversationPanelMetrics.RowHorizontalPadding,
-                    vertical = ConversationPanelMetrics.RowVerticalPadding,
+                    horizontal = LocalPaneMetrics.RowHorizontalPadding,
+                    vertical = LocalPaneMetrics.RowVerticalPadding,
                 ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -539,8 +532,8 @@ private fun ConversationTextRow(
             if (conversation.isActiveRun) {
                 Box(
                     modifier = Modifier
-                        .padding(start = ConversationPanelMetrics.ActiveDotGap)
-                        .size(ConversationPanelMetrics.ActiveDotSize)
+                        .padding(start = LocalPaneMetrics.ActiveDotGap)
+                        .size(LocalPaneMetrics.ActiveDotSize)
                         .clip(CircleShape)
                         .background(MiuixTheme.colorScheme.primary),
                 )
@@ -612,7 +605,7 @@ private fun ConversationTextRow(
                                 Icon(
                                     imageVector = Icons.Outlined.PushPin,
                                     contentDescription = null,
-                                    modifier = modifier.size(ConversationPanelMetrics.ActionIconSize),
+                                    modifier = modifier.size(LocalPaneMetrics.ActionIconSize),
                                 )
                             },
                         )
@@ -624,7 +617,7 @@ private fun ConversationTextRow(
                                 Icon(
                                     imageVector = Icons.Outlined.Edit,
                                     contentDescription = null,
-                                    modifier = modifier.size(ConversationPanelMetrics.ActionIconSize),
+                                    modifier = modifier.size(LocalPaneMetrics.ActionIconSize),
                                 )
                             },
                         )
@@ -636,7 +629,7 @@ private fun ConversationTextRow(
                                 Icon(
                                     imageVector = Icons.Outlined.Folder,
                                     contentDescription = null,
-                                    modifier = modifier.size(ConversationPanelMetrics.ActionIconSize),
+                                    modifier = modifier.size(LocalPaneMetrics.ActionIconSize),
                                 )
                             },
                         )
@@ -648,7 +641,7 @@ private fun ConversationTextRow(
                                 Icon(
                                     imageVector = Icons.Outlined.Download,
                                     contentDescription = null,
-                                    modifier = modifier.size(ConversationPanelMetrics.ActionIconSize),
+                                    modifier = modifier.size(LocalPaneMetrics.ActionIconSize),
                                 )
                             },
                         )
@@ -660,7 +653,7 @@ private fun ConversationTextRow(
                                 Icon(
                                     imageVector = Icons.Outlined.Delete,
                                     contentDescription = null,
-                                    modifier = modifier.size(ConversationPanelMetrics.ActionIconSize),
+                                    modifier = modifier.size(LocalPaneMetrics.ActionIconSize),
                                     tint = MiuixTheme.colorScheme.error,
                                 )
                             },
@@ -740,8 +733,8 @@ private fun EmptyConversations(isSearching: Boolean) {
         style = MiuixTheme.textStyles.body2,
         fontWeight = FontWeight.Normal,
         modifier = Modifier.padding(
-            horizontal = ConversationPanelMetrics.RowHorizontalPadding,
-            vertical = ConversationPanelMetrics.EmptyVerticalPadding,
+            horizontal = LocalPaneMetrics.RowHorizontalPadding,
+            vertical = LocalPaneMetrics.EmptyVerticalPadding,
         ),
     )
 }
@@ -810,7 +803,7 @@ private fun DockEntry(
             .heightIn(min = 46.dp)
             .squircleSurface(
                 color = Color.Transparent,
-                cornerRadius = ConversationPanelMetrics.DockEntryCornerRadius,
+                cornerRadius = LocalPaneMetrics.DockEntryCornerRadius,
             )
             .clickable(onClickLabel = label, onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -818,7 +811,7 @@ private fun DockEntry(
         Icon(
             imageVector = icon,
             contentDescription = label,
-            modifier = Modifier.size(ConversationPanelMetrics.DockEntryIconSize),
+            modifier = Modifier.size(LocalPaneMetrics.DockEntryIconSize),
             tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
         )
     }
@@ -932,7 +925,7 @@ private fun WorkspaceSectionHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = ConversationPanelMetrics.RowHorizontalPadding),
+            .padding(horizontal = LocalPaneMetrics.RowHorizontalPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(

@@ -426,6 +426,7 @@ internal object AgentConversationStore {
                         outputTokens = usage?.outputTokens,
                         reasoningTokens = usage?.reasoningTokens,
                         cachedTokens = usage?.cachedTokens,
+                        cacheWriteTokens = usage?.cacheWriteTokens,
                         stepCount = usage?.stepCount,
                         llmMs = usage?.llmMs,
                         toolMs = usage?.toolMs,
@@ -444,7 +445,20 @@ internal object AgentConversationStore {
                 type = TYPE_SYSTEM_NOTICE,
                 content = code.wireValue,
                 resultSummary = detail,
-                contextTokens = contextTokens,
+                contextTokens = contextTokens ?: tokensBefore,
+                inputTokens = usage?.inputTokens,
+                outputTokens = usage?.outputTokens,
+                reasoningTokens = usage?.reasoningTokens,
+                cachedTokens = usage?.cachedTokens,
+                cacheWriteTokens = usage?.cacheWriteTokens,
+                compactionArchiveId = archiveId.takeIf { it.isNotBlank() },
+                stepCount = usage?.stepCount,
+                llmMs = usage?.llmMs,
+                toolMs = usage?.toolMs,
+                ttftMs = usage?.ttftMs,
+                ttftSteps = usage?.ttftSteps,
+                decodeMs = usage?.decodeMs,
+                decodeTokens = usage?.decodeTokens,
                 renderMarkdown = false,
             )
 
@@ -502,6 +516,7 @@ internal object AgentConversationStore {
                     outputTokens = outputTokens,
                     reasoningTokens = reasoningTokens,
                     cachedTokens = cachedTokens,
+                    cacheWriteTokens = cacheWriteTokens,
                     stepCount = stepCount,
                     llmMs = llmMs,
                     toolMs = toolMs,
@@ -513,11 +528,34 @@ internal object AgentConversationStore {
             )
 
             TYPE_SYSTEM_NOTICE -> SystemNoticeCode.fromWireValue(content)?.let { code ->
+                val noticeUsage = TokenUsageUi(
+                    inputTokens = inputTokens,
+                    outputTokens = outputTokens,
+                    reasoningTokens = reasoningTokens,
+                    cachedTokens = cachedTokens,
+                    cacheWriteTokens = cacheWriteTokens,
+                    requestKind = if (code == SystemNoticeCode.ContextCompaction) {
+                        io.github.mangi.eta.agent.runtime.AgentTokenUsage.REQUEST_KIND_COMPACTION
+                    } else null,
+                    stepCount = stepCount,
+                    llmMs = llmMs,
+                    toolMs = toolMs,
+                    ttftMs = ttftMs,
+                    ttftSteps = ttftSteps,
+                    decodeMs = decodeMs,
+                    decodeTokens = decodeTokens,
+                ).takeUnless { it.isEmpty }
+                val storedBefore = if (code == SystemNoticeCode.ContextCompaction && noticeUsage != null) {
+                    contextTokens
+                } else null
                 SystemNoticeMessageUi(
                     id = id,
                     code = code,
                     detail = resultSummary,
-                    contextTokens = contextTokens,
+                    contextTokens = if (storedBefore != null) null else contextTokens,
+                    usage = noticeUsage,
+                    archiveId = compactionArchiveId.orEmpty(),
+                    tokensBefore = storedBefore,
                 )
             }
 
