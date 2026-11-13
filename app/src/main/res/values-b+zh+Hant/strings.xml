@@ -1293,6 +1293,17 @@
   <string name="speech_voice_doubao_yichen">儒雅逸辰</string>
   <string name="speech_voice_doubao_xiaoming">解說小明</string>
   <string name="speech_voice_doubao_podcast">深夜播客</string>
+  <string name="speech_asr_deepseek">DeepSeek · 語音識別</string>
+  <string name="speech_tts_deepseek">DeepSeek</string>
+  <string name="speech_asr_note_deepseek">錄音結束後返回文字，不提供即時預覽或停頓自動傳送。單次最長 120 秒、最大 8 MiB，語種自動識別。</string>
+  <string name="speech_deepseek_asr_connection_note">填寫 DeepSeek API Key，無需配置 OSS；若留空且已在模型提供商中配置 DeepSeek，將自動復用其憑據。</string>
+  <string name="speech_deepseek_asr_connection_note_with_provider">已偵測到模型提供商中的 DeepSeek 憑據，API Key 留空將自動復用，也可填寫獨立 Key 覆寫；無需配置 OSS。</string>
+  <string name="speech_deepseek_tts_connection_note">填寫 DeepSeek API Key，支援串流語音合成；若留空且已在模型提供商中配置 DeepSeek，將自動復用其憑據。</string>
+  <string name="speech_deepseek_tts_connection_note_with_provider">已偵測到模型提供商中的 DeepSeek 憑據，API Key 留空將自動復用，也可填寫獨立 Key 覆寫。</string>
+  <string name="speech_deepseek_voice_note">支援海星（stella）和暗潮（tide）兩種預設音色，語種根據文字自動識別。</string>
+  <string name="speech_voice_deepseek_stella">海星</string>
+  <string name="speech_voice_deepseek_tide">暗潮</string>
+  <string name="speech_filter_markdown">朗讀前過濾 Markdown 格式</string>
   <string name="speech_qwen_voice_note">模型：qwen3-tts-flash。音色須支援該模型。</string>
   <string name="speech_doubao_voice_note">模型：豆包語音合成 2.0。</string>
   <string name="speech_test_recognition">測試識別</string>
