@@ -148,6 +148,48 @@ internal abstract class EtaDatabase : RoomDatabase() {
         internal val MIGRATION_25_26 = Migration(25, 26) { database ->
             database.execSQL("ALTER TABLE conversation_messages ADD COLUMN cache_write_tokens INTEGER")
             database.execSQL("ALTER TABLE conversation_messages ADD COLUMN compaction_archive_id TEXT")
+        
+
+            database.execSQL(
+                "CREATE TABLE IF NOT EXISTS project_spaces (" +
+                    "id TEXT NOT NULL, " +
+                    "space_key TEXT NOT NULL, " +
+                    "kind TEXT NOT NULL, " +
+                    "host_path TEXT NOT NULL, " +
+                    "linux_path TEXT NOT NULL, " +
+                    "title TEXT NOT NULL, " +
+                    "deletable INTEGER NOT NULL, " +
+                    "last_used_at INTEGER NOT NULL, " +
+                    "created_at INTEGER NOT NULL, " +
+                    "PRIMARY KEY(id))"
+            )
+            database.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS index_project_spaces_space_key " +
+                    "ON project_spaces(space_key)"
+            )
+            database.execSQL("ALTER TABLE conversations ADD COLUMN space_key TEXT")
+            database.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_conversations_space_key " +
+                    "ON conversations(space_key)"
+            )
+            val now = System.currentTimeMillis()
+            database.execSQL(
+                "INSERT OR IGNORE INTO project_spaces " +
+                    "(id, space_key, kind, host_path, linux_path, title, deletable, last_used_at, created_at) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                arrayOf<Any?>(
+                    ProjectSpaceEntity.DEFAULT_SPACE_ID,
+                    ProjectSpaceEntity.DEFAULT_SPACE_KEY,
+                    ProjectSpaceKind.BUILTIN.name,
+                    ProjectSpaceEntity.DEFAULT_HOST_PATH,
+                    ProjectSpaceEntity.DEFAULT_LINUX_PATH,
+                    ProjectSpaceEntity.DEFAULT_TITLE,
+                    0,
+                    now,
+                    now,
+                ),
+            )
+        
         }
 
         private fun createTextChunkCleanup(database: androidx.sqlite.db.SupportSQLiteDatabase) {
@@ -360,46 +402,5 @@ internal abstract class EtaDatabase : RoomDatabase() {
          * 迁移漏写不会崩，但 [Room.databaseBuilder] 开了 `fallbackToDestructiveMigration`，
          * 缺失的步骤会让整库被重建，所以这里的列名与索引名必须与实体注解逐字一致。
          */
-        internal val MIGRATION_25_26 = Migration(25, 26) { database ->
-            database.execSQL(
-                "CREATE TABLE IF NOT EXISTS project_spaces (" +
-                    "id TEXT NOT NULL, " +
-                    "space_key TEXT NOT NULL, " +
-                    "kind TEXT NOT NULL, " +
-                    "host_path TEXT NOT NULL, " +
-                    "linux_path TEXT NOT NULL, " +
-                    "title TEXT NOT NULL, " +
-                    "deletable INTEGER NOT NULL, " +
-                    "last_used_at INTEGER NOT NULL, " +
-                    "created_at INTEGER NOT NULL, " +
-                    "PRIMARY KEY(id))"
-            )
-            database.execSQL(
-                "CREATE UNIQUE INDEX IF NOT EXISTS index_project_spaces_space_key " +
-                    "ON project_spaces(space_key)"
-            )
-            database.execSQL("ALTER TABLE conversations ADD COLUMN space_key TEXT")
-            database.execSQL(
-                "CREATE INDEX IF NOT EXISTS index_conversations_space_key " +
-                    "ON conversations(space_key)"
-            )
-            val now = System.currentTimeMillis()
-            database.execSQL(
-                "INSERT OR IGNORE INTO project_spaces " +
-                    "(id, space_key, kind, host_path, linux_path, title, deletable, last_used_at, created_at) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                arrayOf<Any?>(
-                    ProjectSpaceEntity.DEFAULT_SPACE_ID,
-                    ProjectSpaceEntity.DEFAULT_SPACE_KEY,
-                    ProjectSpaceKind.BUILTIN.name,
-                    ProjectSpaceEntity.DEFAULT_HOST_PATH,
-                    ProjectSpaceEntity.DEFAULT_LINUX_PATH,
-                    ProjectSpaceEntity.DEFAULT_TITLE,
-                    0,
-                    now,
-                    now,
-                ),
-            )
-        }
     }
 }
