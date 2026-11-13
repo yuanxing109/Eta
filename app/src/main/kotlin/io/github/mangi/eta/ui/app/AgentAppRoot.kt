@@ -209,7 +209,7 @@ fun AgentAppRoot(
     var conversationExportTarget by remember { mutableStateOf<ConversationSummaryUi?>(null) }
     var conversationMoveSpaceTarget by remember { mutableStateOf<ConversationSummaryUi?>(null) }
     var conversationCreateSpaceTarget by remember { mutableStateOf<ConversationSummaryUi?>(null) }
-    var projectManageSpaceTarget by remember { mutableStateOf<ConversationSpaceUi?>(null) }
+    var projectCreateRequested by remember { mutableStateOf(false) }
     var projectRenameSpaceTarget by remember { mutableStateOf<ConversationSpaceUi?>(null) }
     var projectDeleteSpaceTarget by remember { mutableStateOf<ConversationSpaceUi?>(null) }
     var messageDeleteTarget by remember { mutableStateOf<MessageMutationTarget?>(null) }
@@ -389,7 +389,19 @@ fun AgentAppRoot(
                 agentState.refreshProjectSpaces()
                 conversationMoveSpaceTarget = conversation
             },
-            onManageProjectSpace = { space -> projectManageSpaceTarget = space },
+            onNewConversationInSpace = { space ->
+                agentState.createConversationInSpace(if (space.isDefault) null else space.spaceKey)
+            },
+            onOpenProjectInTerminal = { space ->
+                val ref = ProjectSpaceRepository.cached().firstOrNull { it.spaceKey == space.spaceKey }
+                if (ref != null) {
+                    PendingTerminalWorkspace.request(ref.hostPath)
+                    pushRoute(AppRoute.Terminal)
+                }
+            },
+            onRenameProjectSpace = { space -> projectRenameSpaceTarget = space },
+            onDeleteProjectSpace = { space -> projectDeleteSpaceTarget = space },
+            onCreateProject = { projectCreateRequested = true },
             onOpenTools = { pushRoute(AppRoute.Tools) },
             onOpenSkills = { pushRoute(AppRoute.Skills) },
             onOpenCharacters = { pushRoute(AppRoute.Characters) },
@@ -1072,71 +1084,49 @@ fun AgentAppRoot(
         }
     }
 
-    projectManageSpaceTarget?.let { space ->
-        val onOpenInTerminal: () -> Unit = {
-            val ref = ProjectSpaceRepository.cached().firstOrNull { it.spaceKey == space.spaceKey }
-            projectManageSpaceTarget = null
-            if (ref != null) {
-                PendingTerminalWorkspace.request(ref.hostPath)
-                pushRoute(AppRoute.Terminal)
+    if (projectCreateRequested) {
+        var projectTitleInput by remember { mutableStateOf("") }
+        val onCreateProject: () -> Unit = {
+            val trimmed = projectTitleInput.trim()
+            if (trimmed.isNotEmpty()) {
+                agentState.createProjectSpace(trimmed)
+                projectCreateRequested = false
             }
         }
         when (LocalUiStyle.current) {
             AppearanceUiStyle.COUI -> {
-                CouiNoticeDialog(
+                CouiInputDialog(
                     visible = true,
-                    title = stringResource(R.string.project_manage_title),
-                    message = space.title,
-                    onDismissRequest = { projectManageSpaceTarget = null },
-                ) {
-                    ProjectSpaceActionRow(
-                        title = stringResource(R.string.project_open_in_terminal),
-                        onClick = onOpenInTerminal,
-                    )
-                    ProjectSpaceActionRow(
-                        title = stringResource(R.string.project_rename),
-                        onClick = {
-                            projectRenameSpaceTarget = space
-                            projectManageSpaceTarget = null
-                        },
-                    )
-                    ProjectSpaceActionRow(
-                        title = stringResource(R.string.project_delete),
-                        destructive = true,
-                        onClick = {
-                            projectDeleteSpaceTarget = space
-                            projectManageSpaceTarget = null
-                        },
-                    )
-                }
+                    title = stringResource(R.string.project_create),
+                    value = projectTitleInput,
+                    onValueChange = { projectTitleInput = it },
+                    placeholder = stringResource(R.string.conversation_move_space_new_hint),
+                    confirmText = stringResource(R.string.project_create),
+                    confirmEnabled = projectTitleInput.isNotBlank(),
+                    onConfirm = onCreateProject,
+                    onDismissRequest = { projectCreateRequested = false },
+                )
             }
             AppearanceUiStyle.MIUIX -> {
                 WindowDialog(
                     show = true,
                     cornerRadius = DialogDefaults.CornerRadius,
-                    title = stringResource(R.string.project_manage_title),
-                    summary = space.title,
-                    onDismissRequest = { projectManageSpaceTarget = null },
+                    title = stringResource(R.string.project_create),
+                    onDismissRequest = { projectCreateRequested = false },
                 ) {
                     Column {
-                        ProjectSpaceActionRow(
-                            title = stringResource(R.string.project_open_in_terminal),
-                            onClick = onOpenInTerminal,
+                        TextField(
+                            value = projectTitleInput,
+                            onValueChange = { projectTitleInput = it },
+                            label = stringResource(R.string.conversation_move_space_new_hint),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
                         )
-                        ProjectSpaceActionRow(
-                            title = stringResource(R.string.project_rename),
-                            onClick = {
-                                projectRenameSpaceTarget = space
-                                projectManageSpaceTarget = null
-                            },
-                        )
-                        ProjectSpaceActionRow(
-                            title = stringResource(R.string.project_delete),
-                            destructive = true,
-                            onClick = {
-                                projectDeleteSpaceTarget = space
-                                projectManageSpaceTarget = null
-                            },
+                        MiuixDialogActions(
+                            confirmText = stringResource(R.string.project_create),
+                            confirmEnabled = projectTitleInput.isNotBlank(),
+                            onCancel = { projectCreateRequested = false },
+                            onConfirm = onCreateProject,
                         )
                     }
                 }
@@ -1383,27 +1373,5 @@ private fun ConversationSpacePickerRow(
                 modifier = Modifier.width(18.dp),
             )
         }
-    }
-}
-
-@Composable
-private fun ProjectSpaceActionRow(
-    title: String,
-    destructive: Boolean = false,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = title,
-            style = MiuixTheme.textStyles.body1,
-            color = if (destructive) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.onSurface,
-        )
     }
 }

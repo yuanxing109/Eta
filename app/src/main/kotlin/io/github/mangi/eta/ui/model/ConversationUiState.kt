@@ -7,7 +7,7 @@ data class ConversationPaneUiState(
     val conversations: List<ConversationSummaryUi>,
     val selectedConversationId: String?,
     val searchQuery: String,
-    /** 侧栏一级分组：项目（工作区）。默认工作区不在其中，会话仍按时间分组展示。 */
+    /** 侧栏一级分组：默认工作区在最前，其后是各项目（工作区）。 */
     val spaces: List<ConversationSpaceUi> = emptyList(),
 )
 
@@ -16,6 +16,8 @@ data class ConversationPaneUiState(
 data class ConversationSpaceUi(
     val spaceKey: String,
     val title: String,
+    /** 内置默认工作区：不可改名、不可删除，只提供「新建对话」。 */
+    val isDefault: Boolean = false,
 )
 
 @Immutable

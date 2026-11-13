@@ -151,9 +151,15 @@ internal class AgentAppState(
     private var conversationPinnedIds: Set<String> = initialConversations.pinnedIds
     /** 会话 -> 项目空间；null 表示未归属，口径与历史一致，仍按时间分组。 */
     private var conversationSpaces: Map<String, String?> = emptyMap()
-    /** 侧栏一级分组头的数据；默认工作区不出现在这里，未归属会话保持原有时间分组。 */
+    /** 选择项目弹窗用的列表：只有用户项目，不含内置默认工作区。 */
     private val projectSpaceOptionsState = mutableStateOf<List<ConversationSpaceUi>>(emptyList())
     val projectSpaceOptions: List<ConversationSpaceUi> get() = projectSpaceOptionsState.value
+    /** 侧栏分组头用的列表：默认工作区在最前，其后是各项目。 */
+    private val paneSpacesState = mutableStateOf<List<ConversationSpaceUi>>(emptyList())
+    /** 新建对话时暂存「要落进哪个项目」，等首个消息把会话落库后再写 space_key。 */
+    private var pendingConversationSpace: String? = null
+    /** 会话落库后待补写的 space_key（id -> spaceKey）。 */
+    private val pendingSpaceAssignments = mutableMapOf<String, String>()
 
     var homeState by mutableStateOf(
         selectedConversationId?.let(conversationsById::get) ?: emptyChatState(defaultThinkingEnabled)
@@ -1010,6 +1016,7 @@ internal class AgentAppState(
     }
 
     fun createConversation() {
+        pendingConversationSpace = null
         conversationSelectionVersion += 1
         cancelHistoryPageLoad()
         conversationSelectionJob?.cancel()
@@ -1195,9 +1202,15 @@ internal class AgentAppState(
             EtaDatabase.get(appContext).conversationDao().conversationSpaceRows()
         }.getOrElse { emptyList() }
         withContext(Dispatchers.Main) {
-            projectSpaceOptionsState.value = spaces
-                .filter { it.kind != ProjectSpaceKind.BUILTIN }
-                .map { ConversationSpaceUi(spaceKey = it.spaceKey, title = it.title) }
+            val uiSpaces = spaces.map {
+                ConversationSpaceUi(
+                    spaceKey = it.spaceKey,
+                    title = it.title,
+                    isDefault = it.kind == ProjectSpaceKind.BUILTIN,
+                )
+            }.sortedWith(compareByDescending<ConversationSpaceUi> { it.isDefault })
+            projectSpaceOptionsState.value = uiSpaces.filter { !it.isDefault }
+            paneSpacesState.value = uiSpaces
             conversationSpaces = bindings.associate { it.id to it.spaceKey }
             refreshConversationSummaries()
         }
@@ -1223,13 +1236,25 @@ internal class AgentAppState(
                 EtaDatabase.get(appContext).conversationDao()
                     .updateConversationSpace(conversationId, target)
             }.isSuccess
-            if (!saved) {
+            if (saved) {
+                // 以库为准重新对齐整张映射，避免内存里残留别的会话的旧绑定。
+                loadProjectSpaces()
+            } else {
                 withContext(Dispatchers.Main) {
                     conversationSpaces = conversationSpaces + (conversationId to previous)
                     refreshConversationSummaries()
                 }
             }
         }
+    }
+
+    /**
+     * 在某个项目里新建对话：会话仍是「发送第一条消息时才落库」的旧流程，
+     * 这里只记下目标项目，等落库后补写 space_key，避免空行污染列表。
+     */
+    fun createConversationInSpace(spaceKey: String?) {
+        createConversation()
+        pendingConversationSpace = spaceKey?.takeIf(String::isNotBlank)
     }
 
     /** 新建项目并（可选）把当前会话直接放进去；身份只决定默认工作区的宿主路径。 */
@@ -1436,6 +1461,12 @@ internal class AgentAppState(
 
         val conversationId = selectedConversationId ?: newConversationId().also {
             selectedConversationId = it
+            pendingConversationSpace?.let { space ->
+                conversationSpaces = conversationSpaces + (it to space)
+                pendingSpaceAssignments[it] = space
+                refreshConversationSummaries()
+            }
+            pendingConversationSpace = null
         }
         dispatchMessageToConversation(
             conversationId = conversationId,
@@ -2626,7 +2657,7 @@ internal class AgentAppState(
         val query = conversationPaneState.searchQuery.trim()
         conversationPaneState = conversationPaneState.copy(
             selectedConversationId = selectedConversationId,
-            spaces = projectSpaceOptionsState.value,
+            spaces = paneSpacesState.value,
             conversations = if (query.isBlank()) {
                 summaries
             } else {
@@ -2654,6 +2685,20 @@ internal class AgentAppState(
         return matches
     }
 
+    /**
+     * 新建对话的首条消息落库后，把暂存的项目绑定补写进 space_key。
+     * 必须在 save 之后执行：之前行还不存在，UPDATE 会打空。
+     */
+    private suspend fun flushPendingSpaceAssignments() {
+        if (pendingSpaceAssignments.isEmpty()) return
+        val pending = pendingSpaceAssignments.toMap()
+        pendingSpaceAssignments.clear()
+        val dao = EtaDatabase.get(appContext).conversationDao()
+        for ((id, space) in pending) {
+            runCatching { dao.updateConversationSpace(id, space) }
+        }
+    }
+
     private fun persistConversations(onSaved: (() -> Unit)? = null): Deferred<Boolean> {
         val selected = selectedConversationId
         val conversations = conversationsById
@@ -2670,6 +2715,7 @@ internal class AgentAppState(
                     previous?.join()
                     persistence.save(appContext,
                         AgentConversationStore.Snapshot(selected, conversations, titles, timestamps, pinned))
+                    flushPendingSpaceAssignments()
                     onSaved?.invoke()
                     scope.launch(Dispatchers.Main.immediate) { releaseInactiveConversations(conversations) }
                     true

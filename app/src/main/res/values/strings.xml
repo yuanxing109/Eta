@@ -245,6 +245,8 @@
   <string name="conversation_move_space_new">New project</string>
   <string name="conversation_move_space_new_hint">Project name</string>
   <string name="project_manage_title">Manage project</string>
+  <string name="project_create">New project</string>
+  <string name="project_new_conversation">New chat in this project</string>
   <string name="project_open_in_terminal">Open in terminal</string>
   <string name="project_rename">Rename project</string>
   <string name="project_delete">Delete project</string>

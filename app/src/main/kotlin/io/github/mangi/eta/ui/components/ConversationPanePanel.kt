@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
@@ -39,6 +40,7 @@ import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SportsBar
+import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -147,7 +149,12 @@ internal fun ConversationPanePanel(
     onConversationExport: (ConversationSummaryUi) -> Unit,
     onConversationDelete: (ConversationSummaryUi) -> Unit,
     onConversationMoveToSpace: (ConversationSummaryUi) -> Unit,
-    onManageProjectSpace: (ConversationSpaceUi) -> Unit,
+    /** 在某个项目里新建对话（默认工作区传 isDefault 的分组）。 */
+    onNewConversationInSpace: (ConversationSpaceUi) -> Unit,
+    onOpenProjectInTerminal: (ConversationSpaceUi) -> Unit,
+    onRenameProjectSpace: (ConversationSpaceUi) -> Unit,
+    onDeleteProjectSpace: (ConversationSpaceUi) -> Unit,
+    onCreateProject: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenModelProviders: () -> Unit,
     onOpenTools: () -> Unit,
@@ -160,8 +167,16 @@ internal fun ConversationPanePanel(
     val query = state.searchQuery.trim()
     // 项目分组默认折叠：会话多时列表首先是一屏分组头，展开才进入组内。
     var expandedSpaceKeys by remember { mutableStateOf(setOf<String>()) }
-    val entries = remember(state.conversations, state.spaces, expandedSpaceKeys, query) {
-        buildDrawerEntries(state.conversations, state.spaces, expandedSpaceKeys, query)
+    // 默认工作区反过来：默认展开，点一下收起，所以单独记「被收起的键」。
+    var collapsedSpaceKeys by remember { mutableStateOf(setOf<String>()) }
+    val entries = remember(state.conversations, state.spaces, expandedSpaceKeys, collapsedSpaceKeys, query) {
+        buildDrawerEntries(
+            conversations = state.conversations,
+            spaces = state.spaces,
+            expandedSpaceKeys = expandedSpaceKeys,
+            collapsedSpaceKeys = collapsedSpaceKeys,
+            query = query,
+        )
     }
 
     Surface(
@@ -213,20 +228,32 @@ internal fun ConversationPanePanel(
                                 ConversationSpaceHeader(
                                     header = entry,
                                     isFirstSection = entryIndex == 0,
-                                    onManageProjectSpace = onManageProjectSpace,
                                     onToggle = {
-                                        expandedSpaceKeys = if (entry.expanded) {
-                                            expandedSpaceKeys - entry.space.spaceKey
+                                        if (entry.space.isDefault) {
+                                            collapsedSpaceKeys = if (entry.expanded) {
+                                                collapsedSpaceKeys + entry.space.spaceKey
+                                            } else {
+                                                collapsedSpaceKeys - entry.space.spaceKey
+                                            }
                                         } else {
-                                            expandedSpaceKeys + entry.space.spaceKey
+                                            expandedSpaceKeys = if (entry.expanded) {
+                                                expandedSpaceKeys - entry.space.spaceKey
+                                            } else {
+                                                expandedSpaceKeys + entry.space.spaceKey
+                                            }
                                         }
                                     },
+                                    onNewConversation = { onNewConversationInSpace(entry.space) },
+                                    onOpenInTerminal = { onOpenProjectInTerminal(entry.space) },
+                                    onRename = { onRenameProjectSpace(entry.space) },
+                                    onDelete = { onDeleteProjectSpace(entry.space) },
                                 )
                             }
                             is ConversationDrawerEntry.SectionHeader -> item(key = "section-${entry.group.section}") {
                                 ConversationSectionHeader(
                                     group = entry.group,
                                     isFirstSection = entryIndex == 0,
+                                    nested = entry.nested,
                                 )
                             }
                             is ConversationDrawerEntry.Conversation -> item(key = entry.conversation.id) {
@@ -244,6 +271,9 @@ internal fun ConversationPanePanel(
                             }
                         }
                     }
+                }
+                item(key = "new-project") {
+                    NewProjectRow(onClick = onCreateProject)
                 }
             }
             PaneFixedRegion {
@@ -331,11 +361,13 @@ private fun PaneActionBar(
 private fun ConversationSectionHeader(
     group: ConversationDrawerGroup,
     isFirstSection: Boolean,
+    nested: Boolean = false,
 ) {
     SmallTitle(
         text = group.localizedLabel(),
         insideMargin = PaddingValues(
-            start = ConversationPanelMetrics.RowHorizontalPadding,
+            start = ConversationPanelMetrics.RowHorizontalPadding +
+                if (nested) NestedSectionIndent else 0.dp,
             top = if (isFirstSection) {
                 ConversationPanelMetrics.FirstSectionTopPadding
             } else {
@@ -351,8 +383,11 @@ private fun ConversationSectionHeader(
 private fun ConversationSpaceHeader(
     header: ConversationDrawerEntry.SpaceHeader,
     isFirstSection: Boolean,
-    onManageProjectSpace: (ConversationSpaceUi) -> Unit,
     onToggle: () -> Unit,
+    onNewConversation: () -> Unit,
+    onOpenInTerminal: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -387,18 +422,36 @@ private fun ConversationSpaceHeader(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        Box(
-            modifier = Modifier
-                .size(28.dp)
-                .clip(CircleShape)
-                .clickable { onManageProjectSpace(header.space) },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.MoreVert,
-                contentDescription = null,
-                tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                modifier = Modifier.size(16.dp),
+        HeaderIconButton(
+            icon = Icons.Outlined.Add,
+            contentDescription = stringResource(R.string.project_new_conversation),
+            onClick = onNewConversation,
+        )
+        if (!header.space.isDefault) {
+            var showProjectMenu by remember { mutableStateOf(false) }
+            val projectMenuAnchor = rememberCouiMenuAnchor()
+            HeaderIconButton(
+                icon = Icons.Outlined.MoreVert,
+                contentDescription = stringResource(R.string.project_manage_title),
+                onClick = { projectMenuAnchor.open { showProjectMenu = true } },
+                modifier = Modifier.couiMenuAnchor(projectMenuAnchor),
+            )
+            ProjectSpaceMenu(
+                expanded = showProjectMenu,
+                onDismissRequest = { showProjectMenu = false },
+                anchor = projectMenuAnchor,
+                onOpenInTerminal = {
+                    showProjectMenu = false
+                    onOpenInTerminal()
+                },
+                onRename = {
+                    showProjectMenu = false
+                    onRename()
+                },
+                onDelete = {
+                    showProjectMenu = false
+                    onDelete()
+                },
             )
         }
         Text(
@@ -806,7 +859,11 @@ private sealed interface ConversationDrawerEntry {
         val expanded: Boolean,
     ) : ConversationDrawerEntry
 
-    data class SectionHeader(val group: ConversationDrawerGroup) : ConversationDrawerEntry
+    data class SectionHeader(
+        val group: ConversationDrawerGroup,
+        /** 默认工作区组内嵌的时间分组，渲染时左缩进一级。 */
+        val nested: Boolean = false,
+    ) : ConversationDrawerEntry
 
     data class Conversation(val conversation: ConversationSummaryUi) : ConversationDrawerEntry
 }
@@ -819,6 +876,7 @@ private fun buildDrawerEntries(
     conversations: List<ConversationSummaryUi>,
     spaces: List<ConversationSpaceUi>,
     expandedSpaceKeys: Set<String>,
+    collapsedSpaceKeys: Set<String>,
     query: String = "",
 ): List<ConversationDrawerEntry> {
     if (conversations.isEmpty()) return emptyList()
@@ -827,12 +885,35 @@ private fun buildDrawerEntries(
     fun ConversationSummaryUi.matchesSearch(): Boolean =
         title.contains(normalizedQuery, ignoreCase = true) ||
             preview.contains(normalizedQuery, ignoreCase = true)
-    val projectKeys = spaces.mapTo(mutableSetOf()) { it.spaceKey }
+    val entries = mutableListOf<ConversationDrawerEntry>()
+    val defaultSpace = spaces.firstOrNull { it.isDefault }
+    val defaultKeys = setOfNotNull(defaultSpace?.spaceKey)
+    val projectKeys = spaces.filterNot { it.isDefault }.mapTo(mutableSetOf()) { it.spaceKey }
+
+    // 默认工作区永远排最前：未归属（space_key = null）的会话都归它，组内保留置顶·今天·日期分组。
+    val defaultItems = conversations
+        .filter { it.spaceKey == null || it.spaceKey in defaultKeys }
+        .filter { !searchActive || it.matchesSearch() }
+    if (defaultSpace != null) {
+        val defaultExpanded = if (searchActive) true else defaultSpace.spaceKey !in collapsedSpaceKeys
+        entries += ConversationDrawerEntry.SpaceHeader(
+            space = defaultSpace,
+            count = defaultItems.size,
+            expanded = defaultExpanded,
+        )
+        if (defaultExpanded) {
+            defaultItems.groupForDrawer().forEach { group ->
+                entries += ConversationDrawerEntry.SectionHeader(group = group, nested = true)
+                group.items.forEach { entries += ConversationDrawerEntry.Conversation(it) }
+            }
+        }
+    }
+
     val bySpace = conversations
         .filter { it.spaceKey != null && it.spaceKey in projectKeys }
         .groupBy { it.spaceKey.orEmpty() }
-    val entries = mutableListOf<ConversationDrawerEntry>()
     for (space in spaces) {
+        if (space.isDefault) continue
         val spaceTitleHit = searchActive && space.title.contains(normalizedQuery, ignoreCase = true)
         val items = bySpace[space.spaceKey].orEmpty()
             .let { if (!searchActive || spaceTitleHit) it else it.filter { c -> c.matchesSearch() } }
@@ -842,14 +923,6 @@ private fun buildDrawerEntries(
         entries += ConversationDrawerEntry.SpaceHeader(space = space, count = items.size, expanded = expanded)
         if (expanded) items.forEach { entries += ConversationDrawerEntry.Conversation(it) }
     }
-    conversations
-        .filter { it.spaceKey == null || it.spaceKey !in projectKeys }
-        .filter { !searchActive || it.matchesSearch() }
-        .groupForDrawer()
-        .forEach { group ->
-            entries += ConversationDrawerEntry.SectionHeader(group)
-            group.items.forEach { entries += ConversationDrawerEntry.Conversation(it) }
-        }
     return entries
 }
 
@@ -899,4 +972,141 @@ private fun isUpdatedToday(timestampMillis: Long): Boolean {
     return now.get(java.util.Calendar.ERA) == target.get(java.util.Calendar.ERA) &&
         now.get(java.util.Calendar.YEAR) == target.get(java.util.Calendar.YEAR) &&
         now.get(java.util.Calendar.DAY_OF_YEAR) == target.get(java.util.Calendar.DAY_OF_YEAR)
+}
+
+/** 默认工作区组内的时间分组缩进量。 */
+private val NestedSectionIndent = 12.dp
+
+@Composable
+private fun HeaderIconButton(
+    icon: ImageVector,
+    contentDescription: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .size(28.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            modifier = Modifier.size(16.dp),
+        )
+    }
+}
+
+/** 项目组头的锚定菜单：在终端打开 / 重命名 / 删除。 */
+@Composable
+private fun ProjectSpaceMenu(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    anchor: com.itos.coui.menu.CouiMenuAnchor,
+    onOpenInTerminal: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val terminalText = stringResource(R.string.project_open_in_terminal)
+    val renameText = stringResource(R.string.project_rename)
+    val deleteText = stringResource(R.string.project_delete)
+    when (LocalUiStyle.current) {
+        AppearanceUiStyle.COUI -> {
+            val destructiveColor = CouiDialogDefaults.themeColors().destructive
+            val items = remember(terminalText, renameText, deleteText, destructiveColor) {
+                listOf(
+                    CouiMenuItem(value = 0, text = terminalText, icon = Icons.Outlined.Terminal),
+                    CouiMenuItem(value = 1, text = renameText, icon = Icons.Outlined.Edit),
+                    CouiMenuItem(
+                        value = 2,
+                        text = deleteText,
+                        icon = Icons.Outlined.Delete,
+                        iconTint = destructiveColor,
+                        dividerBefore = true,
+                    ),
+                )
+            }
+            Menu(
+                expanded = expanded,
+                onDismissRequest = onDismissRequest,
+                items = items,
+                onItemClick = { item ->
+                    when (item.value) {
+                        0 -> onOpenInTerminal()
+                        1 -> onRename()
+                        else -> onDelete()
+                    }
+                },
+                anchor = anchor,
+            )
+        }
+        AppearanceUiStyle.MIUIX -> {
+            WindowListPopup(
+                show = expanded,
+                popupPositionProvider = ListPopupDefaults.ContextMenuPositionProvider,
+                alignment = PopupPositionProvider.Align.BottomEnd,
+                onDismissRequest = onDismissRequest,
+            ) {
+                ListPopupColumn {
+                    DropdownImpl(
+                        item = DropdownItem(text = terminalText),
+                        optionSize = 3,
+                        isSelected = false,
+                        index = 0,
+                        onSelectedIndexChange = { onOpenInTerminal() },
+                    )
+                    DropdownImpl(
+                        item = DropdownItem(text = renameText),
+                        optionSize = 3,
+                        isSelected = false,
+                        index = 1,
+                        onSelectedIndexChange = { onRename() },
+                    )
+                    val deleteColors = DropdownDefaults.dropdownColors(
+                        contentColor = MiuixTheme.colorScheme.error,
+                        selectedContentColor = MiuixTheme.colorScheme.error,
+                        selectedIndicatorColor = MiuixTheme.colorScheme.error,
+                    )
+                    DropdownImpl(
+                        item = DropdownItem(text = deleteText),
+                        optionSize = 3,
+                        isSelected = false,
+                        index = 2,
+                        dropdownColors = deleteColors,
+                        onSelectedIndexChange = { onDelete() },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** 列表底部的「新建项目」入口：不依赖任何会话，先建项目再往里放对话。 */
+@Composable
+private fun NewProjectRow(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = ConversationPanelMetrics.PaneHorizontalPadding)
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = ConversationPanelMetrics.RowHorizontalPadding, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Add,
+            contentDescription = null,
+            tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = stringResource(R.string.project_create),
+            style = MiuixTheme.textStyles.footnote1,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        )
+    }
 }

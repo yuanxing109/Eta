@@ -295,6 +295,8 @@
   <string name="conversation_move_space_new">新增專案</string>
   <string name="conversation_move_space_new_hint">專案名稱</string>
   <string name="project_manage_title">專案管理</string>
+  <string name="project_create">新增專案</string>
+  <string name="project_new_conversation">在此專案新增對話</string>
   <string name="project_open_in_terminal">在終端開啟</string>
   <string name="project_rename">重新命名專案</string>
   <string name="project_delete">刪除專案</string>

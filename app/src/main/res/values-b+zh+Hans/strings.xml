@@ -307,6 +307,8 @@
   <string name="conversation_move_space_new">新建项目</string>
   <string name="conversation_move_space_new_hint">项目名称</string>
   <string name="project_manage_title">项目管理</string>
+  <string name="project_create">新建项目</string>
+  <string name="project_new_conversation">在此项目新建对话</string>
   <string name="project_open_in_terminal">在终端打开</string>
   <string name="project_rename">重命名项目</string>
   <string name="project_delete">删除项目</string>
