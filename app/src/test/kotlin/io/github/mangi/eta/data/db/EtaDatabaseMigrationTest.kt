@@ -60,6 +60,7 @@ class EtaDatabaseMigrationTest {
                 EtaDatabase.MIGRATION_23_24,
                 EtaDatabase.MIGRATION_24_25,
                 EtaDatabase.MIGRATION_25_26,
+                EtaDatabase.MIGRATION_26_27,
             )
             .build()
         try {
@@ -173,6 +174,7 @@ class EtaDatabaseMigrationTest {
                 EtaDatabase.MIGRATION_23_24,
                 EtaDatabase.MIGRATION_24_25,
                 EtaDatabase.MIGRATION_25_26,
+                EtaDatabase.MIGRATION_26_27,
             )
             .build()
         try {
@@ -226,6 +228,89 @@ class EtaDatabaseMigrationTest {
             context.deleteDatabase(databaseName)
         }
     }
+
+    /**
+     * 复现真机闪退：同版本号 26 的两套历史 schema 与 Room 期望不一致时，
+     * 打开库会直接抛 identity 校验异常（`fallbackToDestructiveMigration` 只管版本升降）。
+     * 26 -> 27 必须把两边缺的列/表都补齐，且重复执行不报错。
+     */
+    @Test
+    fun migration26To27HealsBothHistoricalVersion26Shapes() {
+        val context = RuntimeEnvironment.getApplication() as Context
+        val legacyWorkspaceShape = "migration-heal-a-${UUID.randomUUID()}.db"
+        val legacyUpstreamShape = "migration-heal-b-${UUID.randomUUID()}.db"
+
+        openVersion26(context, legacyWorkspaceShape) { db ->
+            db.execSQL("CREATE TABLE IF NOT EXISTS conversations (id TEXT NOT NULL PRIMARY KEY, title TEXT)")
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS conversation_messages (" +
+                    "id TEXT NOT NULL PRIMARY KEY, conversation_id TEXT, sort_index INTEGER)"
+            )
+        }.use { db ->
+            EtaDatabase.MIGRATION_26_27.migrate(db)
+            EtaDatabase.MIGRATION_26_27.migrate(db)
+            assertEquals(true, db.hasColumnForTest("conversation_messages", "cache_write_tokens"))
+            assertEquals(true, db.hasColumnForTest("conversation_messages", "compaction_archive_id"))
+            assertEquals(true, db.hasColumnForTest("conversations", "space_key"))
+            assertEquals(1, countDefaultSpace(db))
+        }
+
+        openVersion26(context, legacyUpstreamShape) { db ->
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS conversations (id TEXT NOT NULL PRIMARY KEY, title TEXT, " +
+                    "space_key TEXT)"
+            )
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS conversation_messages (" +
+                    "id TEXT NOT NULL PRIMARY KEY, conversation_id TEXT, sort_index INTEGER, " +
+                    "cache_write_tokens INTEGER, compaction_archive_id TEXT)"
+            )
+        }.use { db ->
+            EtaDatabase.MIGRATION_26_27.migrate(db)
+            assertEquals(true, db.hasColumnForTest("conversation_messages", "cache_write_tokens"))
+            assertEquals(1, countDefaultSpace(db))
+        }
+    }
+
+    private fun openVersion26(
+        context: Context,
+        databaseName: String,
+        createSchema: (SupportSQLiteDatabase) -> Unit,
+    ): SupportSQLiteDatabase = FrameworkSQLiteOpenHelperFactory().create(
+        SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name(databaseName)
+            .callback(object : SupportSQLiteOpenHelper.Callback(26) {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "CREATE TABLE IF NOT EXISTS room_master_table " +
+                            "(id INTEGER PRIMARY KEY, identity_hash TEXT)"
+                    )
+                    createSchema(db)
+                }
+
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+            })
+            .build()
+    ).writableDatabase
+
+    private fun countDefaultSpace(database: SupportSQLiteDatabase): Int =
+        database.query("SELECT COUNT(*) FROM project_spaces WHERE deletable = 0").use { cursor ->
+            if (cursor.moveToFirst()) cursor.getInt(0) else 0
+        }
+
+    @Suppress("unused")
+    private fun SupportSQLiteDatabase.hasColumnForTest(table: String, column: String): Boolean =
+        query("PRAGMA table_info($table)").use { cursor ->
+            val nameIndex = cursor.getColumnIndex("name")
+            var found = false
+            while (nameIndex >= 0 && cursor.moveToNext()) {
+                if (cursor.getString(nameIndex).equals(column, ignoreCase = true)) {
+                    found = true
+                    break
+                }
+            }
+            found
+        }
 
     private fun createVersion6Database(
         context: Context,

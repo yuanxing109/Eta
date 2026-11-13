@@ -6,6 +6,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [
@@ -27,7 +28,7 @@ import androidx.room.migration.Migration
         UserPersonaEntity::class,
         ProjectSpaceEntity::class,
     ],
-    version = 26,
+    version = 27,
     exportSchema = false,
 )
 internal abstract class EtaDatabase : RoomDatabase() {
@@ -71,6 +72,7 @@ internal abstract class EtaDatabase : RoomDatabase() {
                         MIGRATION_23_24,
                         MIGRATION_24_25,
                         MIGRATION_25_26,
+                        MIGRATION_26_27,
                     )
                     .addCallback(object : Callback() {
                         override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
@@ -190,6 +192,49 @@ internal abstract class EtaDatabase : RoomDatabase() {
                 ),
             )
         
+        }
+
+        /**
+         * 26 这个版本号历史上对应两套互不兼容的 schema：
+         * - 本地工作区线的 26：有 `project_spaces` 表与 `conversations.space_key`，但没有上游的两个统计列；
+         * - 上游 v3.4.3 的 26：有 `cache_write_tokens` / `compaction_archive_id`，但没有项目表。
+         *
+         * 同版本号下 schema 与 Room 期望不一致时不会走 `fallbackToDestructiveMigration`
+         * （那只处理版本升降），而是在打开时直接抛 identity 校验异常，表现为一启动就闪退。
+         * 所以这里升到 27，并把两种历史形态缺的部分都补齐（先 PRAGMA 检查再加列，幂等）。
+         */
+        internal val MIGRATION_26_27 = Migration(26, 27) { database ->
+            if (!database.hasColumn("conversation_messages", "cache_write_tokens")) {
+                database.execSQL("ALTER TABLE conversation_messages ADD COLUMN cache_write_tokens INTEGER")
+            }
+            if (!database.hasColumn("conversation_messages", "compaction_archive_id")) {
+                database.execSQL("ALTER TABLE conversation_messages ADD COLUMN compaction_archive_id TEXT")
+            }
+            database.execSQL(
+                "CREATE TABLE IF NOT EXISTS project_spaces (" +
+                    "id TEXT NOT NULL, " +
+                    "space_key TEXT NOT NULL, " +
+                    "kind TEXT NOT NULL, " +
+                    "host_path TEXT NOT NULL, " +
+                    "linux_path TEXT NOT NULL, " +
+                    "title TEXT NOT NULL, " +
+                    "deletable INTEGER NOT NULL, " +
+                    "last_used_at INTEGER NOT NULL, " +
+                    "created_at INTEGER NOT NULL, " +
+                    "PRIMARY KEY(id))"
+            )
+            database.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS index_project_spaces_space_key " +
+                    "ON project_spaces(space_key)"
+            )
+            if (!database.hasColumn("conversations", "space_key")) {
+                database.execSQL("ALTER TABLE conversations ADD COLUMN space_key TEXT")
+            }
+            database.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_conversations_space_key " +
+                    "ON conversations(space_key)"
+            )
+            insertDefaultProjectSpace(database)
         }
 
         private fun createTextChunkCleanup(database: androidx.sqlite.db.SupportSQLiteDatabase) {
@@ -404,3 +449,22 @@ internal abstract class EtaDatabase : RoomDatabase() {
          */
     }
 }
+
+/**
+ * `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 在 SQLite 上不可用（Android 的 SQLite 版本更不行），
+ * 只能先读 `PRAGMA table_info` 再决定要不要改。用于跨历史 schema 的幂等迁移。
+ */
+private fun SupportSQLiteDatabase.hasColumn(table: String, column: String): Boolean =
+    query("PRAGMA table_info($table)").use { cursor ->
+        val nameIndex = cursor.getColumnIndex("name")
+        var found = false
+        if (nameIndex >= 0) {
+            while (cursor.moveToNext()) {
+                if (cursor.getString(nameIndex).equals(column, ignoreCase = true)) {
+                    found = true
+                    break
+                }
+            }
+        }
+        found
+    }
