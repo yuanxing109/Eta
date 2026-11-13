@@ -272,10 +272,6 @@ internal fun ConversationPanePanel(
                         }
                     }
                 }
-                // 「新建工作区」不依赖任何会话，空列表时也要给入口。
-                item(key = "new-project") {
-                    NewProjectRow(onClick = onCreateProject)
-                }
             }
             PaneFixedRegion {
                 Column(
@@ -1061,29 +1057,3 @@ private fun ProjectSpaceMenu(
 }
 
 
-/** 列表底部的「新建项目」入口：不依赖任何会话，先建项目再往里放对话。 */
-@Composable
-private fun NewProjectRow(onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = ConversationPanelMetrics.PaneHorizontalPadding)
-            .clip(RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = ConversationPanelMetrics.RowHorizontalPadding, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.Add,
-            contentDescription = null,
-            tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            modifier = Modifier.size(16.dp),
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = stringResource(R.string.project_create),
-            style = MiuixTheme.textStyles.footnote1,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-        )
-    }
-}
