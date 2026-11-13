@@ -278,6 +278,140 @@ internal object ConversationPaneIcons {
         }.build()
     }
 
+    /** 折叠状态的工作区，与 [FolderOpen] 同一几何骨架，只差前板的翻起角度。 */
+    val Folder: ImageVector by lazy {
+        vector24("PaneFolder") {
+            path(
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = STROKE,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+            ) {
+                moveTo(3.5f, 17.0f)
+                lineTo(3.5f, 7.0f)
+                quadTo(3.5f, 5.5f, 5.0f, 5.5f)
+                lineTo(9.4f, 5.5f)
+                lineTo(11.2f, 7.6f)
+                lineTo(19.0f, 7.6f)
+                quadTo(20.5f, 7.6f, 20.5f, 9.1f)
+                lineTo(20.5f, 17.0f)
+                quadTo(20.5f, 18.5f, 19.0f, 18.5f)
+                lineTo(5.0f, 18.5f)
+                quadTo(3.5f, 18.5f, 3.5f, 17.0f)
+                close()
+            }
+        }
+    }
+
+    /** 展开状态的工作区：前板外翻，用同一描边粗细保证与历史行图标同色同重。 */
+    val FolderOpen: ImageVector by lazy {
+        vector24("PaneFolderOpen") {
+            path(
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = STROKE,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+            ) {
+                moveTo(3.5f, 16.6f)
+                lineTo(3.5f, 7.0f)
+                quadTo(3.5f, 5.5f, 5.0f, 5.5f)
+                lineTo(9.4f, 5.5f)
+                lineTo(11.2f, 7.6f)
+                lineTo(18.4f, 7.6f)
+                quadTo(19.9f, 7.6f, 19.9f, 9.1f)
+                lineTo(19.9f, 10.4f)
+                moveTo(3.5f, 17.4f)
+                lineTo(5.3f, 11.6f)
+                quadTo(5.7f, 10.4f, 6.9f, 10.4f)
+                lineTo(20.6f, 10.4f)
+                lineTo(18.9f, 16.9f)
+                quadTo(18.6f, 18.1f, 17.3f, 18.1f)
+                lineTo(5.0f, 18.1f)
+                quadTo(3.5f, 18.1f, 3.5f, 17.4f)
+                close()
+            }
+        }
+    }
+
+    /** 组头「更多」：竖向三点，实心保证 16dp 下仍然可辨。 */
+    val MoreVert: ImageVector by lazy {
+        vector24("PaneMoreVert") {
+            path(fill = SolidColor(Color.Black)) {
+                circle(12f, 5.8f, 1.55f)
+                circle(12f, 12f, 1.55f)
+                circle(12f, 18.2f, 1.55f)
+            }
+        }
+    }
+
+    /** 终端入口：`>_` 提示符，与项目菜单的「在终端打开」语义一致。 */
+    val Terminal: ImageVector by lazy {
+        vector24("PaneTerminal") {
+            path(
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = STROKE,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+            ) {
+                moveTo(4.8f, 7.2f)
+                lineTo(9.6f, 12f)
+                lineTo(4.8f, 16.8f)
+                moveTo(12.6f, 17f)
+                lineTo(19.2f, 17f)
+            }
+        }
+    }
+
+    val Edit: ImageVector by lazy {
+        vector24("PaneEdit") {
+            path(
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = STROKE,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+            ) {
+                moveTo(4.6f, 19.4f)
+                lineTo(5.3f, 15.5f)
+                lineTo(15.9f, 4.9f)
+                quadTo(17.0f, 3.8f, 18.1f, 4.9f)
+                lineTo(19.1f, 5.9f)
+                quadTo(20.2f, 7.0f, 19.1f, 8.1f)
+                lineTo(8.5f, 18.7f)
+                close()
+            }
+        }
+    }
+
+    val Trash: ImageVector by lazy {
+        vector24("PaneTrash") {
+            path(
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = STROKE,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+            ) {
+                moveTo(4.6f, 6.9f)
+                lineTo(19.4f, 6.9f)
+                moveTo(9.4f, 6.7f)
+                lineTo(9.4f, 4.7f)
+                quadTo(9.4f, 3.9f, 10.2f, 3.9f)
+                lineTo(13.8f, 3.9f)
+                quadTo(14.6f, 3.9f, 14.6f, 4.7f)
+                lineTo(14.6f, 6.7f)
+                moveTo(6.5f, 7.0f)
+                lineTo(7.4f, 19.0f)
+                quadTo(7.5f, 20.1f, 8.6f, 20.1f)
+                lineTo(15.4f, 20.1f)
+                quadTo(16.5f, 20.1f, 16.6f, 19.0f)
+                lineTo(17.5f, 7.0f)
+                moveTo(10.3f, 10.4f)
+                lineTo(10.6f, 16.6f)
+                moveTo(13.7f, 10.4f)
+                lineTo(13.4f, 16.6f)
+            }
+        }
+    }
+
     private inline fun vector24(
         name: String,
         block: ImageVector.Builder.() -> Unit,
@@ -306,6 +440,21 @@ internal object ConversationPaneIcons {
         quadTo(left, bottom, left, bottom - radius)
         verticalLineTo(top + radius)
         quadTo(left, top, left + radius, top)
+        close()
+    }
+
+    /** 实心圆点：`MoreVert` 这种小尺寸图元用四段贝塞尔近似整圆。 */
+    private fun androidx.compose.ui.graphics.vector.PathBuilder.circle(
+        centerX: Float,
+        centerY: Float,
+        radius: Float,
+    ) {
+        val handle = radius * 0.5523f
+        moveTo(centerX, centerY - radius)
+        curveTo(centerX + handle, centerY - radius, centerX + radius, centerY - handle, centerX + radius, centerY)
+        curveTo(centerX + radius, centerY + handle, centerX + handle, centerY + radius, centerX, centerY + radius)
+        curveTo(centerX - handle, centerY + radius, centerX - radius, centerY + handle, centerX - radius, centerY)
+        curveTo(centerX - radius, centerY - handle, centerX - handle, centerY - radius, centerX, centerY - radius)
         close()
     }
 }

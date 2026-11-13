@@ -74,7 +74,8 @@ fun ConversationSidePaneScaffold(
     onOpen: () -> Unit,
     onDismiss: () -> Unit,
     onSearchChange: (String) -> Unit,
-    onNewConversation: () -> Unit = {},
+    /** 顶栏「+」入口：在默认工作区新建会话；组内新建走 `onNewConversationInSpace`。 */
+    onNewConversation: () -> Unit,
     onConversationSelected: (String) -> Unit,
     onConversationTogglePin: (ConversationSummaryUi) -> Unit,
     onConversationRename: (ConversationSummaryUi) -> Unit,

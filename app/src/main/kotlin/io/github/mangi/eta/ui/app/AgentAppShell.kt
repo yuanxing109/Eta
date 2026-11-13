@@ -126,8 +126,8 @@ internal fun AgentAppShell(
     onConversationExport: (ConversationSummaryUi) -> Unit,
     onConversationDelete: (ConversationSummaryUi) -> Unit,
     onConversationMoveToSpace: (ConversationSummaryUi) -> Unit,
-    /** 上游 v3.4.3 的全局新建会话入口；本地方案按工作区新建，保留参数以兼容上游侧栏调用。 */
-    onNewConversation: () -> Unit = {},
+    /** 顶栏「+」入口：在默认工作区新建会话并回到首页；组内新建走 `onNewConversationInSpace`。 */
+    onNewConversation: () -> Unit,
     onNewConversationInSpace: (ConversationSpaceUi) -> Unit,
     onOpenProjectInTerminal: (ConversationSpaceUi) -> Unit,
     onRenameProjectSpace: (ConversationSpaceUi) -> Unit,

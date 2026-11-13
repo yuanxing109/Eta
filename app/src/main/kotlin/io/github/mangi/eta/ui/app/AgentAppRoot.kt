@@ -402,6 +402,7 @@ fun AgentAppRoot(
                 agentState.refreshProjectSpaces()
                 conversationMoveSpaceTarget = conversation
             },
+            onNewConversation = { createConversation() },
             onNewConversationInSpace = { space ->
                 focusManager.clearFocus()
                 agentState.createConversationInSpace(if (space.isDefault) null else space.spaceKey)
