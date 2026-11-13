@@ -105,25 +105,6 @@ internal object ProjectSpaceRepository {
         return true
     }
 
-    /**
-     * 重新定位项目：把项目指到另一个宿主目录。
-     *
-     * 目录改名或搬走之后，项目里的会话 cwd、终端里开着的 shell 都还指着旧路径，
-     * 这里只改「指向」，不复制、不搬动任何内容。内置工作区不可改。
-     */
-    suspend fun relocate(spaceKey: String, hostPath: String): Boolean {
-        val dao = database()?.projectSpaceDao() ?: return false
-        val path = hostPath.trim()
-        if (path.isEmpty() || !path.startsWith("/")) return false
-        val entity = dao.space(spaceKey) ?: return false
-        if (entity.kind == ProjectSpaceKind.BUILTIN) return false
-        if (entity.hostPath == path) return true
-        runCatching { java.io.File(path).mkdirs() }
-        dao.upsert(entity.copy(hostPath = path))
-        reload()
-        return true
-    }
-
     /** 私有项目：宿主目录在默认工作区之下，Linux 侧是 `/workspace/projects/<slug>` 的子路径。 */
     suspend fun createPrivate(title: String, identity: String): ProjectSpaceRef? {
         val dao = database()?.projectSpaceDao() ?: return null

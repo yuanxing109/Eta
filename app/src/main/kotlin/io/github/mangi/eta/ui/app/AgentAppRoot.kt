@@ -214,7 +214,6 @@ fun AgentAppRoot(
     var conversationCreateSpaceTarget by remember { mutableStateOf<ConversationSummaryUi?>(null) }
     var projectCreateRequested by remember { mutableStateOf(false) }
     var projectRenameSpaceTarget by remember { mutableStateOf<ConversationSpaceUi?>(null) }
-    var projectRelocateSpaceTarget by remember { mutableStateOf<ConversationSpaceUi?>(null) }
     var projectDeleteSpaceTarget by remember { mutableStateOf<ConversationSpaceUi?>(null) }
     var messageDeleteTarget by remember { mutableStateOf<MessageMutationTarget?>(null) }
     var messageRegenerateTarget by remember { mutableStateOf<MessageMutationTarget?>(null) }
@@ -411,16 +410,8 @@ fun AgentAppRoot(
                 }
             },
             onRenameProjectSpace = { space -> projectRenameSpaceTarget = space },
-            onRelocateProjectSpace = { space -> projectRelocateSpaceTarget = space },
             onDeleteProjectSpace = { space -> projectDeleteSpaceTarget = space },
             onCreateProject = { projectCreateRequested = true },
-            homeSpaceTitle = agentState.spaceTitleFor(agentState.conversationPaneState.selectedConversationId),
-            onSwitchHomeSpace = {
-                agentState.refreshProjectSpaces()
-                agentState.conversationPaneState.conversations
-                    .firstOrNull { it.id == agentState.conversationPaneState.selectedConversationId }
-                    ?.let { conversationMoveSpaceTarget = it }
-            },
             onOpenTools = { pushRoute(AppRoute.Tools) },
             onOpenSkills = { pushRoute(AppRoute.Skills) },
             onOpenCharacters = { pushRoute(AppRoute.Characters) },
@@ -1153,59 +1144,6 @@ fun AgentAppRoot(
                             confirmEnabled = projectTitleInput.isNotBlank(),
                             onCancel = { projectCreateRequested = false },
                             onConfirm = onCreateProject,
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    projectRelocateSpaceTarget?.let { space ->
-        val currentPath = remember(space.spaceKey) {
-            ProjectSpaceRepository.cached().firstOrNull { it.spaceKey == space.spaceKey }?.hostPath.orEmpty()
-        }
-        var relocateInput by remember(space.spaceKey) { mutableStateOf(currentPath) }
-        val trimmedPath = relocateInput.trim()
-        val canRelocate = trimmedPath.startsWith("/") && trimmedPath != currentPath
-        val onRelocateProject: () -> Unit = {
-            if (canRelocate) {
-                agentState.relocateProjectSpace(space.spaceKey, trimmedPath)
-                projectRelocateSpaceTarget = null
-            }
-        }
-        when (LocalUiStyle.current) {
-            AppearanceUiStyle.COUI -> {
-                CouiInputDialog(
-                    visible = true,
-                    title = stringResource(R.string.project_relocate),
-                    message = stringResource(R.string.project_relocate_message),
-                    value = relocateInput,
-                    onValueChange = { relocateInput = it },
-                    placeholder = stringResource(R.string.project_relocate_hint),
-                    confirmText = stringResource(R.string.project_relocate),
-                    confirmEnabled = canRelocate,
-                    onConfirm = onRelocateProject,
-                    onDismissRequest = { projectRelocateSpaceTarget = null },
-                )
-            }
-            AppearanceUiStyle.MIUIX -> {
-                WindowDialog(
-                    show = true,
-                    cornerRadius = DialogDefaults.CornerRadius,
-                    title = stringResource(R.string.project_relocate),
-                    onDismissRequest = { projectRelocateSpaceTarget = null },
-                ) {
-                    Column {
-                        TextField(
-                            value = relocateInput,
-                            onValueChange = { relocateInput = it },
-                            label = stringResource(R.string.project_relocate_hint),
-                        )
-                        MiuixDialogActions(
-                            confirmText = stringResource(R.string.project_relocate),
-                            confirmEnabled = canRelocate,
-                            onCancel = { projectRelocateSpaceTarget = null },
-                            onConfirm = onRelocateProject,
                         )
                     }
                 }

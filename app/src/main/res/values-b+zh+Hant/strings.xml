@@ -302,9 +302,6 @@
   <string name="project_rename">重新命名工作區</string>
   <string name="project_delete">刪除工作區</string>
   <string name="project_delete_message">工作區會被移除，歸入其中的會話回落到預設工作區，會話本身不會刪除。</string>
-  <string name="project_relocate">重新定位工作區</string>
-  <string name="project_relocate_hint">資料夾新的絕對路徑</string>
-  <string name="project_relocate_message">資料夾被改名或搬走後，把工作區指回新的絕對路徑。只改指向，不複製任何內容。</string>
   <string name="project_rename_hint">工作區名稱</string>
   <string name="conversation_dock_models">模型</string>
   <string name="conversation_preview_reasoning">Eta 正在思考</string>

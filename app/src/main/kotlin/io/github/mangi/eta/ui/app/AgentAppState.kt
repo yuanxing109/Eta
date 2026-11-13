@@ -1239,23 +1239,6 @@ internal class AgentAppState(
         }
     }
 
-    /** 会话所属工作区的标题；默认工作区（space_key 为空）取内置工作区标题。 */
-    fun spaceTitleFor(conversationId: String?): String? {
-        if (conversationId == null || conversationId !in conversationsById) return null
-        val spaces = paneSpacesState.value
-        val key = conversationSpaces[conversationId]
-        if (key == null) return spaces.firstOrNull { it.isDefault }?.title
-        return spaces.firstOrNull { it.spaceKey == key }?.title
-    }
-
-    /** 把工作区重新指向新的宿主目录（目录改名/搬走后用来指回来）。 */
-    fun relocateProjectSpace(spaceKey: String, hostPath: String) {
-        scope.launch(Dispatchers.IO) {
-            val ok = runCatching { ProjectSpaceRepository.relocate(spaceKey, hostPath) }.getOrDefault(false)
-            if (ok) loadProjectSpaces()
-        }
-    }
-
     fun refreshProjectSpaces() {
         scope.launch(Dispatchers.IO) { loadProjectSpaces() }
     }
