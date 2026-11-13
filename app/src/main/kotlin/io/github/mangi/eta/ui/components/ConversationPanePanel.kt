@@ -1,9 +1,7 @@
 package io.github.mangi.eta.ui.components
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,8 +52,6 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -411,10 +407,6 @@ private fun ConversationSpaceHeader(
             onDismissRequest = { showSpaceMenu = false },
             anchor = spaceMenuAnchor,
             canManage = !header.space.isDefault,
-            onNewConversation = {
-                showSpaceMenu = false
-                onNewConversation()
-            },
             onOpenInTerminal = {
                 showSpaceMenu = false
                 onOpenInTerminal()
@@ -429,7 +421,7 @@ private fun ConversationSpaceHeader(
             },
         )
         HeaderIconButton(
-            icon = Icons.Outlined.Add,
+            icon = ChatActionIcons.NewChat,
             contentDescription = stringResource(R.string.project_new_conversation),
             onClick = onNewConversation,
         )
@@ -437,7 +429,6 @@ private fun ConversationSpaceHeader(
 }
 
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ConversationTextRow(
     conversation: ConversationSummaryUi,
@@ -451,7 +442,6 @@ private fun ConversationTextRow(
     startPadding: Dp = 0.dp,
 ) {
     var showActionMenu by remember { mutableStateOf(false) }
-    val hapticFeedback = LocalHapticFeedback.current
     val anchor = rememberCouiMenuAnchor()
     val isCoui = LocalUiStyle.current == AppearanceUiStyle.COUI
     val couiDark = CouiTheme.isDark
@@ -487,13 +477,7 @@ private fun ConversationTextRow(
                         )
                     },
                 )
-                .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = {
-                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                        anchor.open { showActionMenu = true }
-                    },
-                )
+                .clickable(onClick = onClick)
                 .padding(
                     horizontal = ConversationPanelMetrics.RowHorizontalPadding,
                     vertical = ConversationPanelMetrics.RowVerticalPadding,
@@ -554,6 +538,11 @@ private fun ConversationTextRow(
                         .background(MiuixTheme.colorScheme.primary),
                 )
             }
+            HeaderIconButton(
+                icon = Icons.Outlined.MoreVert,
+                contentDescription = stringResource(R.string.action_more),
+                onClick = { anchor.open { showActionMenu = true } },
+            )
         }
 
         val pinText = stringResource(
@@ -960,27 +949,24 @@ private fun ProjectSpaceMenu(
     onDismissRequest: () -> Unit,
     anchor: com.itos.coui.menu.CouiMenuAnchor,
     canManage: Boolean,
-    onNewConversation: () -> Unit,
     onOpenInTerminal: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val newText = stringResource(R.string.project_new_conversation)
     val terminalText = stringResource(R.string.project_open_in_terminal)
     val renameText = stringResource(R.string.project_rename)
     val deleteText = stringResource(R.string.project_delete)
     when (LocalUiStyle.current) {
         AppearanceUiStyle.COUI -> {
             val destructiveColor = CouiDialogDefaults.themeColors().destructive
-            val items = remember(newText, terminalText, renameText, deleteText, destructiveColor, canManage) {
+            val items = remember(terminalText, renameText, deleteText, destructiveColor, canManage) {
                 buildList {
-                    add(CouiMenuItem(value = 0, text = newText, icon = Icons.Outlined.Add))
-                    add(CouiMenuItem(value = 1, text = terminalText, icon = Icons.Outlined.Terminal))
+                    add(CouiMenuItem(value = 0, text = terminalText, icon = Icons.Outlined.Terminal))
                     if (canManage) {
-                        add(CouiMenuItem(value = 2, text = renameText, icon = Icons.Outlined.Edit))
+                        add(CouiMenuItem(value = 1, text = renameText, icon = Icons.Outlined.Edit))
                         add(
                             CouiMenuItem(
-                                value = 3,
+                                value = 2,
                                 text = deleteText,
                                 icon = Icons.Outlined.Delete,
                                 iconTint = destructiveColor,
@@ -996,9 +982,8 @@ private fun ProjectSpaceMenu(
                 items = items,
                 onItemClick = { item ->
                     when (item.value) {
-                        0 -> onNewConversation()
-                        1 -> onOpenInTerminal()
-                        2 -> onRename()
+                        0 -> onOpenInTerminal()
+                        1 -> onRename()
                         else -> onDelete()
                     }
                 },
@@ -1006,7 +991,7 @@ private fun ProjectSpaceMenu(
             )
         }
         AppearanceUiStyle.MIUIX -> {
-            val optionSize = if (canManage) 4 else 2
+            val optionSize = if (canManage) 3 else 1
             WindowListPopup(
                 show = expanded,
                 popupPositionProvider = ListPopupDefaults.ContextMenuPositionProvider,
@@ -1015,17 +1000,10 @@ private fun ProjectSpaceMenu(
             ) {
                 ListPopupColumn {
                     DropdownImpl(
-                        item = DropdownItem(text = newText),
-                        optionSize = optionSize,
-                        isSelected = false,
-                        index = 0,
-                        onSelectedIndexChange = { onNewConversation() },
-                    )
-                    DropdownImpl(
                         item = DropdownItem(text = terminalText),
                         optionSize = optionSize,
                         isSelected = false,
-                        index = 1,
+                        index = 0,
                         onSelectedIndexChange = { onOpenInTerminal() },
                     )
                     if (canManage) {
@@ -1033,7 +1011,7 @@ private fun ProjectSpaceMenu(
                             item = DropdownItem(text = renameText),
                             optionSize = optionSize,
                             isSelected = false,
-                            index = 2,
+                            index = 1,
                             onSelectedIndexChange = { onRename() },
                         )
                         val deleteColors = DropdownDefaults.dropdownColors(
@@ -1045,7 +1023,7 @@ private fun ProjectSpaceMenu(
                             item = DropdownItem(text = deleteText),
                             optionSize = optionSize,
                             isSelected = false,
-                            index = 3,
+                            index = 2,
                             dropdownColors = deleteColors,
                             onSelectedIndexChange = { onDelete() },
                         )

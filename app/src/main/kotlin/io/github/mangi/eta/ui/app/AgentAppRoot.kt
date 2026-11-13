@@ -343,7 +343,6 @@ fun AgentAppRoot(
             onOpenConversationPane = { conversationPaneOpen = true },
             onDismissConversationPane = { conversationPaneOpen = false },
             onSearchConversations = { query -> agentState.updateSearchQuery(query) },
-            onNewConversation = { createConversation() },
             onOpenTerminal = { pushRoute(AppRoute.Terminal) },
             onLaunchKimiWeb = {
                 requestExecutionNotifications()
@@ -390,7 +389,10 @@ fun AgentAppRoot(
                 conversationMoveSpaceTarget = conversation
             },
             onNewConversationInSpace = { space ->
+                focusManager.clearFocus()
                 agentState.createConversationInSpace(if (space.isDefault) null else space.spaceKey)
+                navigator.popToHome()
+                conversationPaneOpen = false
             },
             onOpenProjectInTerminal = { space ->
                 val ref = ProjectSpaceRepository.cached().firstOrNull { it.spaceKey == space.spaceKey }

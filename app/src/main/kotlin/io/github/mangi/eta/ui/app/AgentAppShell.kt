@@ -64,7 +64,6 @@ import io.github.mangi.eta.data.model.TtsProvider
 import io.github.mangi.eta.data.repository.SpeechSettingsRepository
 import io.github.mangi.eta.ui.components.AdaptiveTopAppBar
 import io.github.mangi.eta.ui.components.AgentTopBarChatHeader
-import io.github.mangi.eta.ui.components.ChatActionIcons
 import io.github.mangi.eta.ui.components.ChatImagePreviewHost
 import io.github.mangi.eta.ui.components.ConversationSidePaneScaffold
 import io.github.mangi.eta.ui.components.MiuixBackButton
@@ -114,7 +113,6 @@ internal fun AgentAppShell(
     onOpenConversationPane: () -> Unit,
     onDismissConversationPane: () -> Unit,
     onSearchConversations: (String) -> Unit,
-    onNewConversation: () -> Unit,
     onOpenTerminal: () -> Unit,
     onLaunchKimiWeb: () -> Unit,
     kimiWebLabel: String,
@@ -207,7 +205,6 @@ internal fun AgentAppShell(
                                             CouiTopBarOverflowMenu(
                                                 dark = dark,
                                                 colors = colors,
-                                                onNewConversation = onNewConversation,
                                                 onOpenTerminal = onOpenTerminal,
                                                 onLaunchKimiWeb = onLaunchKimiWeb,
                                                 kimiWebLabel = kimiWebLabel,
@@ -253,7 +250,6 @@ internal fun AgentAppShell(
                                     color = topBarColor,
                                     onBack = onBack,
                                     onOpenConversationPane = onOpenConversationPane,
-                                    onNewConversation = onNewConversation,
                                     onOpenTerminal = onOpenTerminal,
                                     onLaunchKimiWeb = onLaunchKimiWeb,
                                     kimiWebLabel = kimiWebLabel,
@@ -327,7 +323,6 @@ internal fun AgentAppShell(
 private fun CouiTopBarOverflowMenu(
     dark: Boolean,
     colors: com.itos.coui.layout.CouiPageColors,
-    onNewConversation: () -> Unit,
     onOpenTerminal: () -> Unit,
     onLaunchKimiWeb: () -> Unit,
     kimiWebLabel: String,
@@ -343,7 +338,6 @@ private fun CouiTopBarOverflowMenu(
     val autoReadEnabled = speechSettings?.chatAutoSpeak == true
     val anchor = rememberCouiMenuAnchor()
 
-    val newConversationText = stringResource(R.string.action_new_conversation)
     val openTerminalText = stringResource(R.string.action_open_terminal)
     val stopKimiWebText = stringResource(R.string.capability_kimi_stop)
     val openBrowserText = stringResource(R.string.action_open_browser)
@@ -351,7 +345,6 @@ private fun CouiTopBarOverflowMenu(
         if (autoReadEnabled) R.string.speech_disable_auto_read else R.string.speech_enable_auto_read,
     )
     val menuItems = remember(
-        newConversationText,
         openTerminalText,
         kimiWebLabel,
         openBrowserText,
@@ -362,17 +355,16 @@ private fun CouiTopBarOverflowMenu(
         autoReadEnabled,
     ) {
         buildList {
-            add(CouiMenuItem(value = 0, text = newConversationText, icon = ChatActionIcons.NewChat))
-            add(CouiMenuItem(value = 1, text = openTerminalText, icon = Icons.Rounded.Terminal))
-            add(CouiMenuItem(value = 2, text = kimiWebLabel, icon = Icons.Rounded.Code))
-            add(CouiMenuItem(value = 3, text = openBrowserText, icon = Icons.Rounded.Language))
+            add(CouiMenuItem(value = 0, text = openTerminalText, icon = Icons.Rounded.Terminal))
+            add(CouiMenuItem(value = 1, text = kimiWebLabel, icon = Icons.Rounded.Code))
+            add(CouiMenuItem(value = 2, text = openBrowserText, icon = Icons.Rounded.Language))
             if (canStopKimiWeb) {
-                add(CouiMenuItem(value = 4, text = stopKimiWebText, icon = Icons.Rounded.Stop))
+                add(CouiMenuItem(value = 3, text = stopKimiWebText, icon = Icons.Rounded.Stop))
             }
             if (hasSpeechPlayback) {
                 add(
                     CouiMenuItem(
-                        value = 5,
+                        value = 4,
                         text = autoReadText,
                         icon = if (autoReadEnabled) Icons.AutoMirrored.Rounded.VolumeUp else Icons.AutoMirrored.Rounded.VolumeOff,
                     ),
@@ -400,12 +392,11 @@ private fun CouiTopBarOverflowMenu(
             onItemClick = { item ->
                 showMenu = false
                 when (item.value) {
-                    0 -> onNewConversation()
-                    1 -> onOpenTerminal()
-                    2 -> onLaunchKimiWeb()
-                    3 -> onOpenBrowser()
-                    4 -> onStopKimiWeb()
-                    5 -> speechSettings?.let { current ->
+                    0 -> onOpenTerminal()
+                    1 -> onLaunchKimiWeb()
+                    2 -> onOpenBrowser()
+                    3 -> onStopKimiWeb()
+                    4 -> speechSettings?.let { current ->
                         scope.launch {
                             SpeechSettingsRepository.save(current.copy(chatAutoSpeak = !current.chatAutoSpeak))
                         }
@@ -424,7 +415,6 @@ private fun AgentTopBar(
     color: Color,
     onBack: () -> Unit,
     onOpenConversationPane: () -> Unit,
-    onNewConversation: () -> Unit,
     onOpenTerminal: () -> Unit,
     onLaunchKimiWeb: () -> Unit,
     kimiWebLabel: String,
@@ -444,7 +434,6 @@ private fun AgentTopBar(
         HomeMiuixTopBar(
             color = color,
             onOpenConversationPane = onOpenConversationPane,
-            onNewConversation = onNewConversation,
             onOpenTerminal = onOpenTerminal,
             onLaunchKimiWeb = onLaunchKimiWeb,
             kimiWebLabel = kimiWebLabel,
@@ -493,7 +482,6 @@ private fun AgentTopBar(
 private fun HomeMiuixTopBar(
     color: Color,
     onOpenConversationPane: () -> Unit,
-    onNewConversation: () -> Unit,
     onOpenTerminal: () -> Unit,
     onLaunchKimiWeb: () -> Unit,
     kimiWebLabel: String,
@@ -535,7 +523,6 @@ private fun HomeMiuixTopBar(
             centerContent()
         }
         TopBarOverflowMenu(
-            onNewConversation = onNewConversation,
             onOpenTerminal = onOpenTerminal,
             onLaunchKimiWeb = onLaunchKimiWeb,
             kimiWebLabel = kimiWebLabel,
@@ -551,7 +538,6 @@ private val TopBarMenuIconSize = 20.dp
 
 @Composable
 private fun TopBarOverflowMenu(
-    onNewConversation: () -> Unit,
     onOpenTerminal: () -> Unit,
     onLaunchKimiWeb: () -> Unit,
     kimiWebLabel: String,
@@ -578,7 +564,6 @@ private fun TopBarOverflowMenu(
             alignment = PopupPositionProvider.Align.End,
             onDismissRequest = { showMenu = false },
         ) {
-            val newConversationText = stringResource(R.string.action_new_conversation)
             val openTerminalText = stringResource(R.string.action_open_terminal)
             val launchKimiWebText = kimiWebLabel
             val stopKimiWebText = stringResource(R.string.capability_kimi_stop)
@@ -587,7 +572,6 @@ private fun TopBarOverflowMenu(
                 if (autoReadEnabled) R.string.speech_disable_auto_read else R.string.speech_enable_auto_read,
             )
             val menuItems = remember(
-                newConversationText,
                 openTerminalText,
                 launchKimiWebText,
                 openBrowserText,
@@ -598,16 +582,6 @@ private fun TopBarOverflowMenu(
                 autoReadEnabled,
             ) {
                 listOf(
-                    DropdownItem(
-                        text = newConversationText,
-                        icon = { modifier ->
-                            Icon(
-                                imageVector = ChatActionIcons.NewChat,
-                                contentDescription = null,
-                                modifier = modifier.size(TopBarMenuIconSize),
-                            )
-                        },
-                    ),
                     DropdownItem(
                         text = openTerminalText,
                         icon = { modifier ->
@@ -685,11 +659,10 @@ private fun TopBarOverflowMenu(
                                     }
                                 }
                             } else when (index) {
-                                0 -> onNewConversation()
-                                1 -> onOpenTerminal()
-                                2 -> onLaunchKimiWeb()
-                                3 -> onOpenBrowser()
-                                4 -> onStopKimiWeb()
+                                0 -> onOpenTerminal()
+                                1 -> onLaunchKimiWeb()
+                                2 -> onOpenBrowser()
+                                3 -> onStopKimiWeb()
                             }
                         },
                     )
